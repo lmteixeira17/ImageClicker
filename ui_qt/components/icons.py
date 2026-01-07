@@ -39,6 +39,7 @@ class Icons:
     FOLDER = "▤"
     MOUSE = "➤"
     CLOCK = "◔"
+    TEST = "⚡"  # Simular/Testar
 
     # App
     APP_ICON = "◉"

@@ -4,7 +4,7 @@ Página Dashboard - Visão geral e estatísticas.
 
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QFrame, QGridLayout, QScrollArea, QSplitter
+    QFrame, QGridLayout, QScrollArea
 )
 from PyQt6.QtCore import Qt
 
@@ -45,7 +45,7 @@ class StatCard(QFrame):
 
 
 class MiniTaskRow(QFrame):
-    """Versão compacta do TaskRow para o Dashboard (sem CRUD)."""
+    """Versão compacta do TaskRow para o Dashboard (suporta simples e múltiplas opções)."""
 
     def __init__(self, task, is_running: bool, on_play, on_stop, parent=None):
         super().__init__(parent)
@@ -102,11 +102,38 @@ class MiniTaskRow(QFrame):
         info_layout.addWidget(window_lbl)
 
         threshold_pct = int(getattr(task, 'threshold', 0.85) * 100)
-        template_lbl = QLabel(f"<span style='color:{Theme.TEXT_SECONDARY}'>{task.image_name}</span> · <span style='color:{Theme.ACCENT_PRIMARY}'>{task.interval}s</span> · <span style='color:{Theme.TEXT_MUTED}'>{threshold_pct}%</span>")
+
+        # Mostra info diferente para tasks simples vs múltiplas opções
+        if task.task_type == "prompt_handler" and task.options:
+            opts_count = len(task.options)
+            selected = task.options[task.selected_option]["name"] if task.selected_option < len(task.options) else "?"
+            info_text = f"<span style='color:{Theme.ACCENT_SECONDARY}'>{opts_count} opções: {selected}</span> · <span style='color:{Theme.ACCENT_PRIMARY}'>{task.interval}s</span> · <span style='color:{Theme.TEXT_MUTED}'>{threshold_pct}%</span>"
+        else:
+            info_text = f"<span style='color:{Theme.TEXT_SECONDARY}'>{task.image_name}</span> · <span style='color:{Theme.ACCENT_PRIMARY}'>{task.interval}s</span> · <span style='color:{Theme.TEXT_MUTED}'>{threshold_pct}%</span>"
+
+        template_lbl = QLabel(info_text)
         template_lbl.setStyleSheet("font-size: 11px;")
         info_layout.addWidget(template_lbl)
 
         main_layout.addLayout(info_layout, 1)
+
+        # Click counter
+        self._click_count = 0
+        self.click_label = QLabel("0")
+        self.click_label.setStyleSheet(f"color: {Theme.TEXT_MUTED}; font-weight: bold; font-size: 12px;")
+        self.click_label.setToolTip("Cliques realizados")
+        main_layout.addWidget(self.click_label)
+
+    def increment_click_count(self):
+        """Incrementa contador de cliques."""
+        self._click_count += 1
+        self.click_label.setText(str(self._click_count))
+        self.click_label.setStyleSheet(f"color: {Theme.SUCCESS}; font-weight: bold; font-size: 12px;")
+        # Volta para cor normal após 500ms
+        from PyQt6.QtCore import QTimer
+        QTimer.singleShot(500, lambda: self.click_label.setStyleSheet(
+            f"color: {Theme.TEXT_MUTED}; font-weight: bold; font-size: 12px;"
+        ))
 
     def _toggle(self):
         if self.is_running:
@@ -128,94 +155,14 @@ class MiniTaskRow(QFrame):
         self.status_dot.setStyleSheet(f"color: {color}; font-size: 12px;")
 
 
-class MiniPromptRow(QFrame):
-    """Versão compacta do PromptHandlerRow para o Dashboard."""
-
-    def __init__(self, handler, is_running: bool, on_play, on_stop, parent=None):
-        super().__init__(parent)
-        self.handler = handler
-        self.is_running = is_running
-        self.on_play = on_play
-        self.on_stop = on_stop
-
-        self.setProperty("class", "task-row")
-        self.setFixedHeight(50)
-
-        main_layout = QHBoxLayout(self)
-        main_layout.setContentsMargins(10, 6, 10, 6)
-        main_layout.setSpacing(10)
-
-        # Play/Stop button
-        play_text = f"{Icons.STOP}" if is_running else f"{Icons.PLAY}"
-        self.play_btn = QPushButton(play_text)
-        self.play_btn.setFixedSize(36, 36)
-        self.play_btn.setProperty("variant", "danger" if is_running else "success")
-        self.play_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.play_btn.clicked.connect(self._toggle)
-        main_layout.addWidget(self.play_btn)
-
-        # ID + Status
-        id_frame = QFrame()
-        id_frame.setFixedWidth(35)
-        id_layout = QVBoxLayout(id_frame)
-        id_layout.setContentsMargins(0, 0, 0, 0)
-        id_layout.setSpacing(0)
-
-        id_label = QLabel(f"#{handler.id}")
-        id_label.setStyleSheet("font-weight: bold; font-size: 11px;")
-        id_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        id_layout.addWidget(id_label)
-
-        self.status_dot = QLabel(Icons.RUNNING if is_running else Icons.STOPPED)
-        self.status_dot.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        color = Theme.STATUS_RUNNING if is_running else Theme.STATUS_STOPPED
-        self.status_dot.setStyleSheet(f"color: {color}; font-size: 12px;")
-        id_layout.addWidget(self.status_dot)
-
-        main_layout.addWidget(id_frame)
-
-        # Info
-        info_layout = QVBoxLayout()
-        info_layout.setContentsMargins(0, 0, 0, 0)
-        info_layout.setSpacing(2)
-
-        window_name = handler.process_name or handler.window_title
-        window_display = window_name[:20] + "..." if len(window_name) > 20 else window_name
-        window_lbl = QLabel(f"<b>{window_display}</b>")
-        window_lbl.setToolTip(window_name)
-        info_layout.addWidget(window_lbl)
-
-        opts_count = len(handler.options) if handler.options else 0
-        selected = handler.options[handler.selected_option]["name"] if handler.options else "N/A"
-        threshold_pct = int(getattr(handler, 'threshold', 0.85) * 100)
-        opts_lbl = QLabel(f"<span style='color:{Theme.TEXT_SECONDARY}'>{opts_count} opções</span> · <span style='color:{Theme.ACCENT_PRIMARY}'>{selected}</span> · <span style='color:{Theme.TEXT_MUTED}'>{threshold_pct}%</span>")
-        opts_lbl.setStyleSheet("font-size: 11px;")
-        info_layout.addWidget(opts_lbl)
-
-        main_layout.addLayout(info_layout, 1)
-
-    def _toggle(self):
-        if self.is_running:
-            self.on_stop(self.handler.id)
-            self.is_running = False
-            self.play_btn.setText(Icons.PLAY)
-            self.play_btn.setProperty("variant", "success")
-        else:
-            self.on_play(self.handler.id)
-            self.is_running = True
-            self.play_btn.setText(Icons.STOP)
-            self.play_btn.setProperty("variant", "danger")
-
-        self.play_btn.style().unpolish(self.play_btn)
-        self.play_btn.style().polish(self.play_btn)
-
-        self.status_dot.setText(Icons.RUNNING if self.is_running else Icons.STOPPED)
-        color = Theme.STATUS_RUNNING if self.is_running else Theme.STATUS_STOPPED
-        self.status_dot.setStyleSheet(f"color: {color}; font-size: 12px;")
-
-
 class DashboardPage(BasePage):
-    """Página de dashboard."""
+    """Página de dashboard com lista unificada de tasks."""
+
+    def __init__(self, app, parent=None):
+        # Inicializa dicionários ANTES do _build_ui
+        self._task_rows = {}
+        self._total_clicks = 0
+        super().__init__(app, parent)
 
     def _build_ui(self):
         self.set_title("Dashboard")
@@ -240,24 +187,59 @@ class DashboardPage(BasePage):
         stats_layout.setSpacing(12)
 
         self.stat_tasks = StatCard("☰", "0", "Tasks", Theme.ACCENT_PRIMARY)
-        self.stat_prompts = StatCard("◎", "0", "Prompts", Theme.ACCENT_SECONDARY)
         self.stat_running = StatCard("●", "0", "Rodando", Theme.SUCCESS)
         self.stat_stopped = StatCard("○", "0", "Parados", Theme.TEXT_MUTED)
+        self.stat_clicks = StatCard("🖱", "0", "Clicks", Theme.WARNING)
 
         stats_layout.addWidget(self.stat_tasks)
-        stats_layout.addWidget(self.stat_prompts)
         stats_layout.addWidget(self.stat_running)
         stats_layout.addWidget(self.stat_stopped)
+        stats_layout.addWidget(self.stat_clicks)
 
         layout.addLayout(stats_layout)
 
-        # Splitter: Tasks | Prompts
-        splitter = QSplitter(Qt.Orientation.Horizontal)
-        layout.addWidget(splitter, 1)
+        # Quick Actions Bar
+        quick_actions = QFrame()
+        quick_actions.setProperty("class", "glass-panel")
+        quick_actions.setFixedHeight(50)
 
-        # === Tasks Panel ===
+        qa_layout = QHBoxLayout(quick_actions)
+        qa_layout.setContentsMargins(12, 8, 12, 8)
+        qa_layout.setSpacing(8)
+
+        qa_label = QLabel("Ações Rápidas")
+        qa_label.setStyleSheet(f"color: {Theme.TEXT_MUTED}; font-size: 12px;")
+        qa_layout.addWidget(qa_label)
+
+        qa_layout.addSpacing(12)
+
+        # Botão Nova Task
+        new_task_btn = QPushButton(f"{Icons.ADD}  Nova Task")
+        new_task_btn.setProperty("variant", "primary")
+        new_task_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        new_task_btn.setToolTip("Ctrl+N")
+        new_task_btn.clicked.connect(self._new_task)
+        qa_layout.addWidget(new_task_btn)
+
+        # Botão Capturar
+        capture_btn = QPushButton(f"{Icons.CAPTURE}  Capturar")
+        capture_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        capture_btn.setToolTip("Ctrl+Shift+C")
+        capture_btn.clicked.connect(self._capture)
+        qa_layout.addWidget(capture_btn)
+
+        qa_layout.addStretch()
+
+        # Atalhos dica
+        shortcuts_hint = QLabel("F1 ou Ctrl+H para ver atalhos")
+        shortcuts_hint.setStyleSheet(f"color: {Theme.TEXT_MUTED}; font-size: 11px;")
+        qa_layout.addWidget(shortcuts_hint)
+
+        layout.addWidget(quick_actions)
+
+        # === Tasks Panel (unified) ===
         self.tasks_panel = GlassPanel("Tasks (0)")
-        splitter.addWidget(self.tasks_panel)
+        layout.addWidget(self.tasks_panel, 1)
 
         tasks_scroll = QScrollArea()
         tasks_scroll.setWidgetResizable(True)
@@ -273,26 +255,6 @@ class DashboardPage(BasePage):
         tasks_scroll.setWidget(self.tasks_container)
         self.tasks_panel.add_widget(tasks_scroll)
 
-        # === Prompts Panel ===
-        self.prompts_panel = GlassPanel("Prompts (0)")
-        splitter.addWidget(self.prompts_panel)
-
-        prompts_scroll = QScrollArea()
-        prompts_scroll.setWidgetResizable(True)
-        prompts_scroll.setFrameShape(QFrame.Shape.NoFrame)
-        prompts_scroll.setStyleSheet("background: transparent;")
-
-        self.prompts_container = QWidget()
-        self.prompts_layout = QVBoxLayout(self.prompts_container)
-        self.prompts_layout.setContentsMargins(0, 0, 0, 0)
-        self.prompts_layout.setSpacing(4)
-        self.prompts_layout.addStretch()
-
-        prompts_scroll.setWidget(self.prompts_container)
-        self.prompts_panel.add_widget(prompts_scroll)
-
-        splitter.setSizes([500, 500])
-
         # Log panel
         self.log_panel = LogPanel(
             title="Log",
@@ -303,7 +265,7 @@ class DashboardPage(BasePage):
         layout.addWidget(self.log_panel)
 
         # Log inicial
-        self.log_panel.log("Dashboard carregado", "info")
+        self.log_panel.log("Dashboard pronto", "success")
 
     def on_show(self):
         """Atualiza ao exibir."""
@@ -314,81 +276,78 @@ class DashboardPage(BasePage):
         if not self.task_manager:
             return
 
-        all_items = self.task_manager.get_all_tasks()
-        tasks = [t for t in all_items if t.task_type != "prompt_handler"]
-        prompts = [t for t in all_items if t.task_type == "prompt_handler"]
+        # Lista unificada de todas as tasks
+        all_tasks = self.task_manager.get_all_tasks()
 
-        running_count = sum(1 for t in all_items if self.task_manager.is_task_running(t.id))
-        stopped_count = len(all_items) - running_count
+        running_count = sum(1 for t in all_tasks if self.task_manager.is_task_running(t.id))
+        stopped_count = len(all_tasks) - running_count
 
         # Atualiza stats
-        self.stat_tasks.set_value(str(len(tasks)))
-        self.stat_prompts.set_value(str(len(prompts)))
+        self.stat_tasks.set_value(str(len(all_tasks)))
         self.stat_running.set_value(str(running_count))
         self.stat_stopped.set_value(str(stopped_count))
 
-        # Atualiza títulos dos painéis
-        self.tasks_panel.set_title(f"Tasks ({len(tasks)})")
-        self.prompts_panel.set_title(f"Prompts ({len(prompts)})")
+        # Atualiza título do painel
+        self.tasks_panel.set_title(f"Tasks ({len(all_tasks)})")
 
-        # === Atualiza lista de tasks ===
+        # Preserva contadores de cliques existentes
+        old_clicks = {tid: row._click_count for tid, row in self._task_rows.items()}
+
+        # === Atualiza lista unificada de tasks ===
+        # Limpa widgets antigos
         while self.tasks_layout.count() > 1:
             item = self.tasks_layout.takeAt(0)
             if item.widget():
                 item.widget().deleteLater()
 
-        if not tasks:
+        # Limpa dicionário (widgets foram deletados)
+        self._task_rows.clear()
+
+        if not all_tasks:
             placeholder = QLabel("Nenhuma task")
             placeholder.setProperty("variant", "muted")
             placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
             self.tasks_layout.insertWidget(0, placeholder)
         else:
-            for task in tasks:
+            for task in all_tasks:
                 row = MiniTaskRow(
                     task=task,
                     is_running=self.task_manager.is_task_running(task.id),
                     on_play=self._on_task_play,
                     on_stop=self._on_task_stop
                 )
+                # Restaura contador de cliques
+                if task.id in old_clicks:
+                    row._click_count = old_clicks[task.id]
+                    row.click_label.setText(str(row._click_count))
+                self._task_rows[task.id] = row
                 self.tasks_layout.insertWidget(self.tasks_layout.count() - 1, row)
-
-        # === Atualiza lista de prompts ===
-        while self.prompts_layout.count() > 1:
-            item = self.prompts_layout.takeAt(0)
-            if item.widget():
-                item.widget().deleteLater()
-
-        if not prompts:
-            placeholder = QLabel("Nenhum prompt handler")
-            placeholder.setProperty("variant", "muted")
-            placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            self.prompts_layout.insertWidget(0, placeholder)
-        else:
-            for handler in prompts:
-                row = MiniPromptRow(
-                    handler=handler,
-                    is_running=self.task_manager.is_task_running(handler.id),
-                    on_play=self._on_prompt_play,
-                    on_stop=self._on_prompt_stop
-                )
-                self.prompts_layout.insertWidget(self.prompts_layout.count() - 1, row)
 
     def add_log(self, message: str, level: str = "info"):
         """Adiciona mensagem ao log."""
         self.log_panel.log(message, level)
 
+    def increment_click_count(self, task_id: int):
+        """Incrementa contador de cliques de uma task."""
+        if hasattr(self, '_task_rows') and task_id in self._task_rows:
+            self._task_rows[task_id].increment_click_count()
+
+        # Atualiza total de clicks na sessão
+        self._total_clicks += 1
+        self.stat_clicks.set_value(str(self._total_clicks))
+
     def _start_all(self):
-        """Inicia todas as tasks e prompts."""
+        """Inicia todas as tasks."""
         if self.task_manager:
             self.task_manager.start()
-            self.log_panel.log("Tudo iniciado", "success")
+            self.log_panel.log("Todas as tasks iniciadas", "success")
             self.refresh()
 
     def _stop_all(self):
-        """Para todas as tasks e prompts."""
+        """Para todas as tasks."""
         if self.task_manager:
             self.task_manager.stop()
-            self.log_panel.log("Tudo parado", "warning")
+            self.log_panel.log("Todas as tasks paradas", "warning")
             self.refresh()
 
     def _on_task_play(self, task_id: int):
@@ -403,14 +362,12 @@ class DashboardPage(BasePage):
             self.task_manager.stop_single(task_id)
             self.refresh()
 
-    def _on_prompt_play(self, handler_id: int):
-        """Inicia prompt handler."""
-        if self.task_manager:
-            self.task_manager.start_single(handler_id)
-            self.refresh()
+    def _new_task(self):
+        """Navega para Tasks e abre formulário."""
+        self.app.navigate("tasks")
+        if hasattr(self.app._pages.get("tasks"), 'open_new_task_dialog'):
+            self.app._pages["tasks"].open_new_task_dialog()
 
-    def _on_prompt_stop(self, handler_id: int):
-        """Para prompt handler."""
-        if self.task_manager:
-            self.task_manager.stop_single(handler_id)
-            self.refresh()
+    def _capture(self):
+        """Inicia captura de template."""
+        self.app.start_capture()

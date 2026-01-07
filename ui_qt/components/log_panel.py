@@ -175,20 +175,28 @@ class LogPanel(QFrame):
 
         Args:
             message: Mensagem a adicionar
-            level: "info", "success", "warning", "error"
+            level: "info", "success", "warning", "error", "click", "search", "task"
         """
         timestamp = datetime.now().strftime("[%H:%M:%S]")
 
-        # Prefixo e cor por nível
+        # Prefixo (emoji) e cor por nível
         level_config = {
-            "info": ("i", Theme.TEXT_SECONDARY),
-            "success": ("+", Theme.SUCCESS),
-            "warning": ("!", Theme.WARNING),
-            "error": ("x", Theme.DANGER),
+            "info": ("ℹ️", Theme.ACCENT_SECONDARY),      # Azul claro - informação geral
+            "success": ("✅", Theme.SUCCESS),            # Verde - sucesso/clique realizado
+            "warning": ("⚠️", Theme.WARNING),            # Amarelo - aviso
+            "error": ("❌", Theme.DANGER),               # Vermelho - erro
+            "click": ("🖱️", "#00E676"),                  # Verde brilhante - clique executado
+            "search": ("🔍", Theme.ACCENT_PRIMARY),      # Roxo - buscando template
+            "task": ("📋", "#64B5F6"),                   # Azul - ação de task
+            "window": ("🪟", "#81D4FA"),                 # Azul claro - janela encontrada
+            "start": ("▶️", Theme.SUCCESS),              # Verde - iniciando
+            "stop": ("⏹️", Theme.TEXT_MUTED),            # Cinza - parando
+            "found": ("🎯", "#FFAB40"),                  # Laranja - encontrou template
+            "notfound": ("👻", Theme.TEXT_MUTED),        # Cinza - não encontrou
         }
-        prefix, color = level_config.get(level, ("i", Theme.TEXT_SECONDARY))
+        emoji, color = level_config.get(level, ("ℹ️", Theme.TEXT_SECONDARY))
 
-        line = f"{timestamp} {prefix} {message}"
+        line = f"{timestamp} {emoji} {message}"
 
         # Adiciona à lista
         self._lines.append((line, color))

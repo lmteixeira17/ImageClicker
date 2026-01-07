@@ -4,8 +4,8 @@
 
 ImageClicker é uma ferramenta de automação de cliques baseada em reconhecimento de imagem para Windows. Suporta execução paralela de múltiplas tasks em diferentes janelas simultaneamente.
 
-**Versão**: 2.0 (Multi-Task & Multi-Window)
-**Última Atualização**: 2026-01-06
+**Versão**: 3.0 (Professional UX)
+**Última Atualização**: 2026-01-07
 
 ## Estrutura do Projeto
 
@@ -51,52 +51,89 @@ ImageClicker/
   - `pyautogui` - Automação de mouse/teclado
   - `pillow` - Manipulação de imagens
   - `opencv-python` - Reconhecimento de imagem (template matching)
-  - `customtkinter` - Interface gráfica moderna
-  - `pywin32` - Controle de janelas Windows
+  - `PyQt6` - Interface gráfica moderna (Glassmorphism)
+  - `pywin32` - Controle de janelas Windows e cliques fantasma
   - `numpy` - Operações com arrays
+  - `easyocr` - OCR para extração de texto em capturas (opcional)
 
 ### Arquitetura
 
 - **CLI (iclick.py)**: Comandos para captura, clique, scripts e tasks
-- **GUI (gui.py)**: Interface gráfica com tabs (Tasks, Imagens), galeria, log
+- **GUI (app_qt.py)**: Interface gráfica PyQt6 com páginas (Dashboard, Tasks, Templates, Prompts, Settings)
 - **TaskManager**: Gerenciador de execução paralela com ThreadPoolExecutor
-- **Templates**: Imagens PNG para template matching (pyautogui + OpenCV)
+- **Templates**: Imagens PNG para template matching (OpenCV TM_CCOEFF_NORMED)
+- **Ghost Click**: Cliques via PostMessage (não rouba foco)
 
 ## Funcionalidades Principais
 
 ### 1. Template Matching
 
-- **pyautogui**: Busca em tela toda (confidence 90%)
-- **OpenCV**: Busca em janela específica (threshold 85%, TM_CCOEFF_NORMED)
+- **OpenCV**: Busca em janela específica (threshold configurável por task, default 85%)
+- **Multi-instância**: Busca em TODAS as janelas do mesmo processo (ex: 3 VSCodes)
 - Suporte multi-monitor via virtual screen
+- Escalonamento automático de DPI
 
 ### 2. Sistema de Tasks (Paralelo)
 
 - Execução simultânea de múltiplas automações
 - Cada task monitora uma janela específica (wildcards suportados)
+- **Busca multi-janela**: Encontra template em todas as instâncias do processo
 - Controle individual (play/stop por task)
+- **Threshold configurável**: Cada task/prompt pode ter seu próprio threshold (50-99%)
 - Persistência em `tasks.json`
 - Status em tempo real
 
-### 3. Sistema de Scripts (Sequencial)
+### 3. Clique Fantasma (Ghost Click)
 
-- Workflows complexos definidos em JSON
-- 8 tipos de ações: click, double_click, right_click, type, press, hotkey, wait, wait_for
-- Execução passo-a-passo com validação
+- **Não rouba foco**: Cliques via `PostMessage` direto para a janela alvo
+- **Não move cursor**: Mouse permanece onde está durante automação
+- Suporta click, double_click, right_click
+- Encontra controle filho automaticamente (botões, inputs, etc.)
 
-### 4. Captura Visual
+### 4. Sistema de Prompts
+
+- Monitora janelas aguardando prompts/diálogos
+- Múltiplas opções de resposta configuráveis
+- Threshold individual por prompt
+- Clica automaticamente na opção selecionada
+
+### 5. Captura Visual com OCR
 
 - Overlay fullscreen multi-monitor
-- Preview em tempo real
-- Coordenadas e dimensões visíveis
+- Preview em tempo real com dimensões
+- **OCR automático**: Extrai texto do botão capturado (EasyOCR)
+- **DPI automático**: Detecta escala DPI da janela
+- Nome sugerido: `{TextoOCR}_{Processo}_{DPI}DPI`
 - ESC para cancelar, botão direito para reiniciar
 
-### 5. Galeria de Templates
+### 6. Galeria de Templates
 
-- Grid de thumbnails 3 colunas
-- Preview ampliável
+- Grid de thumbnails 4 colunas (150x130px)
+- **Hover preview**: Preview ampliado ao passar o mouse
+- Preview ampliável no painel lateral
 - Teste, renomeação e exclusão de templates
 - Integração com Explorer
+
+### 7. Sistema de Atalhos de Teclado
+
+- **Navegação**: Ctrl+1-5 para páginas
+- **Ações**: Ctrl+N (nova task), Ctrl+Shift+C (captura), Ctrl+E/Shift+S (start/stop all)
+- **Ajuda**: F1 ou Ctrl+H (lista de atalhos)
+- KeyboardManager centralizado em `ui_qt/keyboard_manager.py`
+
+### 8. Toast Notifications
+
+- Feedback visual para ações do usuário
+- Tipos: success, error, warning, info
+- Auto-dismiss configurável
+- Empilhável (máx 3 visíveis)
+
+### 9. Onboarding
+
+- Welcome modal na primeira execução
+- Tour guiado pelas páginas
+- Quick Start Checklist no Dashboard
+- Estado persistido em `.imageclicker_config.json`
 
 ## Comandos CLI Principais
 
@@ -143,7 +180,7 @@ python iclick.py list                        # Lista recursos
 - ThreadPoolExecutor para tasks paralelas
 - threading.Event para stop events (parada graceful)
 - threading.Lock para dicionários compartilhados
-- GUI: usar `self.after()` para thread-safety
+- GUI PyQt6: usar `QTimer.singleShot()` ou signals para thread-safety
 
 ### Encoding
 
@@ -809,4 +846,4 @@ wc -l docs/*.md
 - Regras de documentação forem modificadas
 - Workflow de desenvolvimento mudar
 
-**Última Revisão Completa**: 2026-01-06
+**Última Revisão Completa**: 2026-01-07

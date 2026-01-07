@@ -7,6 +7,56 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 
 ## [Unreleased]
 
+### Fixed
+
+- Captura de janelas agora usa PrintWindow API em vez de ImageGrab
+- Cliques funcionam mesmo quando janela está atrás de outras janelas
+- Não é mais necessário ter a janela em foco para template matching
+
+## [3.0.0] - 2026-01-07
+
+### Added
+
+- Sistema de atalhos de teclado global (Ctrl+1-5 navegação, Ctrl+N nova task, Ctrl+Shift+C captura, F1/Ctrl+H ajuda)
+- Toast notifications com tipos: success, error, warning, info
+- Onboarding para novos usuários (welcome modal, tour guiado, checklist)
+- Help dialog com lista de todos os atalhos
+- Quick Actions no Dashboard (+Task, Capturar)
+- Contador de cliques em tempo real nas TaskRows
+- Animação pulse no status indicator quando task está rodando
+- Hover preview ampliado nos thumbnails da galeria
+- Quick Start Checklist no Dashboard
+
+### Changed
+
+- Dashboard redesenhado com Quick Actions bar
+- Thumbnails maiores na galeria (116x100 → 150x130)
+- Galeria agora usa 4 colunas em vez de 3
+- TaskRow com contador de cliques visível
+- UX melhorada com feedback visual em todas as ações
+
+### Fixed
+
+- Melhor organização do código com KeyboardManager separado
+- Onboarding state persistido em arquivo de configuração
+
+## [2.1.0] - 2026-01-06
+
+### Added
+
+- Ghost click (cliques sem roubar foco usando PostMessage)
+- Busca multi-janela (encontra template em todas as janelas do processo)
+- OCR na captura de templates (EasyOCR)
+- Threshold configurável por task
+- Log panel com emojis coloridos por tipo de mensagem
+
+### Changed
+
+- Cliques agora usam PostMessage em vez de mouse_event
+- Template names incluem DPI quando diferente de 100%
+
+## [2.0.1] - 2026-01-06
+
 ### Added
 
 - Sistema de documentação estruturada em `docs/`

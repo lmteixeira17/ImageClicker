@@ -1,8 +1,10 @@
 """
 Funções para template matching e clique em imagens.
 Usa OpenCV para detecção e pywin32 para cliques "fantasma" (sem roubar foco).
+Suporta captura de janelas em background usando PrintWindow API.
 """
 
+import ctypes
 import time
 from pathlib import Path
 from typing import Callable, Optional, Tuple
@@ -12,12 +14,76 @@ import numpy as np
 import win32api
 import win32con
 import win32gui
-from PIL import ImageGrab
+import win32ui
 
 from .window_utils import get_window_dpi_scale
 
 # Threshold mínimo para considerar um match válido (85%)
 MATCH_THRESHOLD = 0.85
+
+# PrintWindow flags
+PW_CLIENTONLY = 1
+PW_RENDERFULLCONTENT = 2  # Windows 8.1+, captura conteúdo mesmo em background
+
+
+def capture_window(hwnd: int) -> Optional[np.ndarray]:
+    """
+    Captura o conteúdo de uma janela usando PrintWindow API.
+    Funciona mesmo quando a janela está atrás de outras ou parcialmente coberta.
+
+    Args:
+        hwnd: Handle da janela
+
+    Returns:
+        numpy array BGR da imagem ou None se falhar
+    """
+    try:
+        # Obtém dimensões da janela
+        left, top, right, bottom = win32gui.GetWindowRect(hwnd)
+        width = right - left
+        height = bottom - top
+
+        if width <= 0 or height <= 0:
+            return None
+
+        # Cria DC e bitmap compatíveis
+        hwnd_dc = win32gui.GetWindowDC(hwnd)
+        mfc_dc = win32ui.CreateDCFromHandle(hwnd_dc)
+        save_dc = mfc_dc.CreateCompatibleDC()
+
+        bitmap = win32ui.CreateBitmap()
+        bitmap.CreateCompatibleBitmap(mfc_dc, width, height)
+        save_dc.SelectObject(bitmap)
+
+        # PrintWindow com flag para capturar conteúdo em background
+        # Flag 2 (PW_RENDERFULLCONTENT) funciona melhor para janelas modernas
+        result = ctypes.windll.user32.PrintWindow(hwnd, save_dc.GetSafeHdc(), PW_RENDERFULLCONTENT)
+
+        if result == 0:
+            # Fallback: tenta sem flag (para janelas mais antigas)
+            result = ctypes.windll.user32.PrintWindow(hwnd, save_dc.GetSafeHdc(), 0)
+
+        # Converte bitmap para numpy array
+        bmp_info = bitmap.GetInfo()
+        bmp_bits = bitmap.GetBitmapBits(True)
+
+        img = np.frombuffer(bmp_bits, dtype=np.uint8)
+        img = img.reshape((bmp_info['bmHeight'], bmp_info['bmWidth'], 4))
+
+        # Limpa recursos
+        win32gui.DeleteObject(bitmap.GetHandle())
+        save_dc.DeleteDC()
+        mfc_dc.DeleteDC()
+        win32gui.ReleaseDC(hwnd, hwnd_dc)
+
+        # Converte BGRA para BGR (remove canal alpha)
+        img_bgr = img[:, :, :3]
+
+        return img_bgr
+
+    except Exception as e:
+        return None
+
 
 # Constantes para mensagens de mouse
 WM_LBUTTONDOWN = 0x0201
@@ -58,11 +124,14 @@ def find_and_click(
         rect = win32gui.GetWindowRect(hwnd)
         debug(f"  Window rect: {rect}")
 
-        # Captura screenshot da janela (all_screens=True para multi-monitor)
-        screenshot = ImageGrab.grab(rect, all_screens=True)
-        screenshot_np = np.array(screenshot)
-        debug(f"  Screenshot shape: {screenshot_np.shape}")
-        screenshot_gray = cv2.cvtColor(screenshot_np, cv2.COLOR_RGB2GRAY)
+        # Captura janela usando PrintWindow (funciona em background)
+        screenshot_bgr = capture_window(hwnd)
+
+        if screenshot_bgr is None:
+            return False, 'Falha ao capturar janela', 0.0
+
+        debug(f"  Screenshot shape: {screenshot_bgr.shape}")
+        screenshot_gray = cv2.cvtColor(screenshot_bgr, cv2.COLOR_BGR2GRAY)
 
         # Carrega template
         template = cv2.imread(str(template_path), cv2.IMREAD_GRAYSCALE)
@@ -156,25 +225,25 @@ def _perform_ghost_click(hwnd: int, x: int, y: int, action: str):
         y: Coordenada Y relativa à janela
         action: "click", "double_click" ou "right_click"
     """
-    # Encontra o controle filho específico (se houver)
-    target_hwnd, target_x, target_y = _get_child_at_point(hwnd, x, y)
-    lparam = _make_lparam(target_x, target_y)
+    # Envia direto para a janela principal para evitar roubo de foco
+    # Não usamos _get_child_at_point pois WindowFromPoint pode ativar janelas
+    lparam = _make_lparam(x, y)
 
     if action == "double_click":
         # Double click usa mensagem específica WM_LBUTTONDBLCLK
-        win32gui.PostMessage(target_hwnd, WM_LBUTTONDOWN, MK_LBUTTON, lparam)
-        win32gui.PostMessage(target_hwnd, WM_LBUTTONUP, 0, lparam)
+        win32gui.PostMessage(hwnd, WM_LBUTTONDOWN, MK_LBUTTON, lparam)
+        win32gui.PostMessage(hwnd, WM_LBUTTONUP, 0, lparam)
         time.sleep(0.01)
-        win32gui.PostMessage(target_hwnd, WM_LBUTTONDBLCLK, MK_LBUTTON, lparam)
-        win32gui.PostMessage(target_hwnd, WM_LBUTTONUP, 0, lparam)
+        win32gui.PostMessage(hwnd, WM_LBUTTONDBLCLK, MK_LBUTTON, lparam)
+        win32gui.PostMessage(hwnd, WM_LBUTTONUP, 0, lparam)
     elif action == "right_click":
-        win32gui.PostMessage(target_hwnd, WM_RBUTTONDOWN, MK_RBUTTON, lparam)
+        win32gui.PostMessage(hwnd, WM_RBUTTONDOWN, MK_RBUTTON, lparam)
         time.sleep(0.01)
-        win32gui.PostMessage(target_hwnd, WM_RBUTTONUP, 0, lparam)
+        win32gui.PostMessage(hwnd, WM_RBUTTONUP, 0, lparam)
     else:  # click
-        win32gui.PostMessage(target_hwnd, WM_LBUTTONDOWN, MK_LBUTTON, lparam)
+        win32gui.PostMessage(hwnd, WM_LBUTTONDOWN, MK_LBUTTON, lparam)
         time.sleep(0.01)
-        win32gui.PostMessage(target_hwnd, WM_LBUTTONUP, 0, lparam)
+        win32gui.PostMessage(hwnd, WM_LBUTTONUP, 0, lparam)
 
 
 def check_template_visible(
@@ -194,10 +263,12 @@ def check_template_visible(
         Tupla (visível, percentual_match)
     """
     try:
-        rect = win32gui.GetWindowRect(hwnd)
-        screenshot = ImageGrab.grab(rect, all_screens=True)
-        screenshot_np = np.array(screenshot)
-        screenshot_gray = cv2.cvtColor(screenshot_np, cv2.COLOR_RGB2GRAY)
+        # Captura janela usando PrintWindow (funciona em background)
+        screenshot_bgr = capture_window(hwnd)
+        if screenshot_bgr is None:
+            return False, 0.0
+
+        screenshot_gray = cv2.cvtColor(screenshot_bgr, cv2.COLOR_BGR2GRAY)
 
         template = cv2.imread(str(template_path), cv2.IMREAD_GRAYSCALE)
         if template is None:
@@ -241,9 +312,10 @@ def find_template_location(
     """
     try:
         rect = win32gui.GetWindowRect(hwnd)
-        screenshot = ImageGrab.grab(rect, all_screens=True)
-        screenshot_np = np.array(screenshot)
-        screenshot_gray = cv2.cvtColor(screenshot_np, cv2.COLOR_RGB2GRAY)
+        screenshot_bgr = capture_window(hwnd)
+        if screenshot_bgr is None:
+            return None
+        screenshot_gray = cv2.cvtColor(screenshot_bgr, cv2.COLOR_BGR2GRAY)
 
         template = cv2.imread(str(template_path), cv2.IMREAD_GRAYSCALE)
         if template is None:

@@ -42,17 +42,17 @@ class Sidebar(QFrame):
         self._buttons = {}
 
         menu_items = [
-            ("dashboard", Icons.DASHBOARD, "Dashboard"),
-            ("tasks", Icons.TASKS, "Tasks"),
-            ("prompts", Icons.PROMPTS, "Prompts"),
-            ("templates", Icons.IMAGE, "Templates"),
+            ("dashboard", Icons.DASHBOARD, "Dashboard", "Visão geral e logs em tempo real (Ctrl+1)"),
+            ("tasks", Icons.TASKS, "Tasks", "Gerenciar automações de clique (Ctrl+2)"),
+            ("templates", Icons.IMAGE, "Templates", "Galeria de imagens para reconhecimento (Ctrl+3)"),
         ]
 
-        for page_id, icon, label in menu_items:
+        for page_id, icon, label, tooltip in menu_items:
             btn = QPushButton(f"  {icon}   {label}")
             btn.setCheckable(True)
             btn.setCursor(Qt.CursorShape.PointingHandCursor)
             btn.setStyleSheet("font-size: 13px; text-align: left;")
+            btn.setToolTip(tooltip)
             btn.clicked.connect(lambda checked, p=page_id: self._on_click(p))
             self._button_group.addButton(btn)
             self._buttons[page_id] = btn
@@ -74,6 +74,7 @@ class Sidebar(QFrame):
         settings_btn.setCheckable(True)
         settings_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         settings_btn.setStyleSheet("font-size: 13px; text-align: left;")
+        settings_btn.setToolTip("Configurações do aplicativo (Ctrl+4)")
         settings_btn.clicked.connect(lambda: self._on_click("settings"))
         self._button_group.addButton(settings_btn)
         self._buttons["settings"] = settings_btn

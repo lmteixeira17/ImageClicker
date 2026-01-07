@@ -139,21 +139,53 @@ class TaskManager:
         self.on_execution = on_execution
         self._next_id = 1
         self._lock = threading.Lock()
+        self._last_log_status: Dict[int, str] = {}  # Guarda último status logado por task
 
     def add_task(
         self,
         window_title: str,
-        image_name: str,
+        image_name: str = "",
         action: str = "click",
         repeat: bool = False,
         interval: float = 5.0,
         window_method: str = "title",
         process_name: str = "",
         title_filter: str = "",
-        window_index: int = 0
+        window_index: int = 0,
+        threshold: float = 0.85,
+        options: Optional[List[dict]] = None,
+        selected_option: int = 0
     ) -> Task:
-        """Adiciona nova task simples."""
+        """
+        Adiciona nova task (unificado para simples e múltiplas opções).
+
+        Args:
+            window_title: Título da janela (ou nome se usa processo)
+            image_name: Nome do template (modo simples)
+            action: Tipo de clique (click, double_click, right_click)
+            repeat: Se deve repetir continuamente
+            interval: Intervalo entre repetições em segundos
+            window_method: "title" ou "process"
+            process_name: Nome do processo (ex: "Code.exe")
+            title_filter: Filtro adicional de título
+            window_index: Índice da janela quando múltiplas
+            threshold: Threshold de detecção (0.0 a 1.0)
+            options: Lista de opções [{"name": str, "image": str}, ...] (modo múltiplas)
+            selected_option: Índice da opção selecionada (modo múltiplas)
+
+        Se `options` for fornecido, cria uma task com múltiplas opções.
+        Caso contrário, cria uma task simples com template único.
+        """
         with self._lock:
+            # Determina tipo baseado em options
+            if options and len(options) > 0:
+                task_type = "prompt_handler"
+                # Múltiplas opções sempre repetem
+                repeat = True
+            else:
+                task_type = "simple"
+                options = None
+
             task = Task(
                 id=self._next_id,
                 window_title=window_title,
@@ -162,6 +194,10 @@ class TaskManager:
                 action=action,
                 repeat=repeat,
                 interval=interval,
+                threshold=threshold,
+                task_type=task_type,
+                options=options,
+                selected_option=selected_option,
                 window_method=window_method,
                 process_name=process_name,
                 title_filter=title_filter,
@@ -180,29 +216,29 @@ class TaskManager:
         window_method: str = "title",
         process_name: str = "",
         title_filter: str = "",
-        window_index: int = 0
+        window_index: int = 0,
+        threshold: float = 0.85
     ) -> Task:
-        """Adiciona nova task do tipo prompt_handler."""
-        with self._lock:
-            task = Task(
-                id=self._next_id,
-                window_title=window_title,
-                hwnd=None,
-                image_name="",  # Não usado em prompt_handler
-                action=action,
-                repeat=True,  # Prompt handlers sempre repetem
-                interval=interval,
-                task_type="prompt_handler",
-                options=options,
-                selected_option=0,
-                window_method=window_method,
-                process_name=process_name,
-                title_filter=title_filter,
-                window_index=window_index
-            )
-            self.tasks[task.id] = task
-            self._next_id += 1
-            return task
+        """
+        Adiciona nova task do tipo prompt_handler.
+
+        DEPRECATED: Use add_task() com parâmetro options.
+        Mantido para compatibilidade.
+        """
+        return self.add_task(
+            window_title=window_title,
+            image_name="",
+            action=action,
+            repeat=True,
+            interval=interval,
+            window_method=window_method,
+            process_name=process_name,
+            title_filter=title_filter,
+            window_index=window_index,
+            threshold=threshold,
+            options=options,
+            selected_option=0
+        )
 
     def remove_task(self, task_id: int):
         """Remove task."""
@@ -285,6 +321,7 @@ class TaskManager:
         if task_id in self.task_threads:
             self.task_threads[task_id].set()  # Sinaliza para parar
             del self.task_threads[task_id]
+            self._last_log_status.pop(task_id, None)  # Limpa histórico de log
             self._log(f"Task #{task_id} parada")
             if task_id in self.tasks:
                 self._update_status(self.tasks[task_id], "Parado")
@@ -304,6 +341,7 @@ class TaskManager:
             event.set()
 
         self.task_threads.clear()
+        self._last_log_status.clear()  # Limpa histórico de log
 
         if self.executor:
             self.executor.shutdown(wait=False)
@@ -322,11 +360,14 @@ class TaskManager:
 
             if not all_windows:
                 self._update_status(task, "Janela?")
-                # Log diferente dependendo do método
-                if task.window_method == "process":
-                    self._log(f"Task #{task.id}: Processo '{task.process_name}' não encontrado")
-                else:
-                    self._log(f"Task #{task.id}: Janela '{task.window_title[:30]}' não encontrada")
+                # Log diferente dependendo do método (apenas se mudou desde o último log)
+                status_key = "window_not_found"
+                if self._last_log_status.get(task.id) != status_key:
+                    if task.window_method == "process":
+                        self._log(f"Task #{task.id}: Processo '{task.process_name}' não encontrado")
+                    else:
+                        self._log(f"Task #{task.id}: Janela '{task.window_title[:30]}' não encontrada")
+                    self._last_log_status[task.id] = status_key
                 if not task.repeat:
                     break
                 stop_event.wait(2)
@@ -336,6 +377,10 @@ class TaskManager:
             success = False
             match = 0.0
             num_windows = len(all_windows)
+
+            # Reseta status de "janela não encontrada" quando encontrar janelas
+            if self._last_log_status.get(task.id) == "window_not_found":
+                self._last_log_status.pop(task.id, None)
 
             self._update_status(task, f"Buscando ({num_windows})...")
 
@@ -410,8 +455,8 @@ class TaskManager:
     def _run_prompt_handler(self, task: Task, stop_event: threading.Event, silent: bool = False) -> tuple:
         """
         Executa uma task do tipo prompt_handler.
-        1. Verifica se QUALQUER botão das opções está visível (indica que o prompt apareceu)
-        2. Se visível, clica no botão da opção selecionada
+        1. Verifica se TODAS as opções estão visíveis (confirma que é o prompt correto)
+        2. Se todas visíveis, clica no botão da opção selecionada
 
         Args:
             task: Task a executar
@@ -423,9 +468,12 @@ class TaskManager:
                 self._log(f"Task #{task.id}: Nenhuma opção configurada")
             return False, 0.0
 
-        # Verifica se algum botão está visível
-        prompt_visible = False
+        # Verifica se TODAS as opções estão visíveis (garante que é o prompt correto)
+        all_visible = True
         best_match = 0.0
+        visible_count = 0
+        total_options = len(task.options)
+
         for opt in task.options:
             if stop_event.is_set():
                 return False, 0.0
@@ -435,12 +483,27 @@ class TaskManager:
                 if match > best_match:
                     best_match = match
                 if visible:
-                    prompt_visible = True
-                    self._log(f"Task #{task.id}: Prompt detectado! ('{opt['name']}' visível: {match:.0%})")
-                    break
+                    visible_count += 1
+                else:
+                    all_visible = False
+            else:
+                all_visible = False
+                if not silent:
+                    self._log(f"Task #{task.id}: Template '{opt['image']}' não encontrado")
 
-        if not prompt_visible:
+        if not all_visible:
+            # Log parcial se algumas foram encontradas (apenas se mudou desde o último log)
+            if visible_count > 0 and not silent:
+                status_key = f"partial_{visible_count}_{total_options}"
+                if self._last_log_status.get(task.id) != status_key:
+                    self._log(f"Task #{task.id}: {visible_count}/{total_options} opções visíveis (aguardando todas)")
+                    self._last_log_status[task.id] = status_key
             return False, best_match
+
+        # Todas as opções visíveis - prompt confirmado!
+        self._log(f"Task #{task.id}: Prompt confirmado! ({total_options}/{total_options} opções visíveis)")
+        # Reseta status de log para permitir novos logs quando voltar ao estado parcial
+        self._last_log_status.pop(task.id, None)
 
         # Prompt visível - clica na opção selecionada
         selected_idx = task.selected_option
