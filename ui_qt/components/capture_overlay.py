@@ -213,46 +213,212 @@ class CaptureOverlay(QWidget):
         self._capture_screen()
 
     def _capture_screen(self):
-        """Captura screenshot usando MSS ou fallback Qt."""
+        """Captura screenshot usando a melhor estratégia disponível.
+
+        Ordem de tentativa:
+        1. MSS (multi-monitor, funciona bem com USB docks)
+        2. Win32 API (multi-GPU, funciona com NVIDIA/AMD)
+        3. Qt multi-screen (fallback Qt nativo)
+        4. Qt primary screen (último recurso)
+        """
+        # Estratégia 1: MSS
+        if self._try_capture_mss():
+            return
+
+        # Estratégia 2: Win32 API (melhor para multi-GPU)
+        if self._try_capture_win32():
+            return
+
+        # Estratégia 3: Qt multi-screen
+        if self._try_capture_qt_multiscreen():
+            return
+
+        # Estratégia 4: Qt primary (último recurso)
+        self._capture_qt_primary()
+
+    def _try_capture_mss(self) -> bool:
+        """Tenta captura usando MSS (multi-monitor via virtual screen)."""
         try:
-            self._capture_screen_mss()
-        except ImportError:
-            self._capture_screen_qt_fallback()
+            import mss
+            from PyQt6.QtGui import QImage
+
+            with mss.mss() as sct:
+                # Monitor 0 é o virtual screen (todas as telas combinadas)
+                if len(sct.monitors) < 2:
+                    return False  # MSS não detectou múltiplos monitores
+
+                monitor = sct.monitors[0]
+
+                # Verifica se é um virtual screen válido (dimensões razoáveis)
+                if monitor["width"] < 100 or monitor["height"] < 100:
+                    return False
+
+                screenshot = sct.grab(monitor)
+
+                img = QImage(
+                    screenshot.bgra,
+                    screenshot.width,
+                    screenshot.height,
+                    screenshot.width * 4,
+                    QImage.Format.Format_ARGB32
+                ).copy()
+
+                self._screenshot = QPixmap.fromImage(img)
+                self._screenshot_original = self._screenshot.copy()
+                self._scale_x = 1.0
+                self._scale_y = 1.0
+
+                self._offset = QPoint(monitor["left"], monitor["top"])
+                self.setGeometry(
+                    monitor["left"],
+                    monitor["top"],
+                    monitor["width"],
+                    monitor["height"]
+                )
+                return True
+
         except Exception:
-            self._capture_screen_qt_fallback()
+            return False
 
-    def _capture_screen_mss(self):
-        """Captura usando MSS (multi-monitor)."""
-        import mss
-        from PyQt6.QtGui import QImage
+    def _try_capture_win32(self) -> bool:
+        """Tenta captura usando Win32 API (melhor para multi-GPU/desktop).
 
-        with mss.mss() as sct:
-            monitor = sct.monitors[0]
-            screenshot = sct.grab(monitor)
+        Usa GetSystemMetrics para obter virtual screen e BitBlt para captura.
+        Funciona mesmo quando MSS falha em configurações multi-GPU.
+        """
+        try:
+            import win32gui
+            import win32ui
+            import win32con
+            import win32api
+            from PyQt6.QtGui import QImage
 
-            img = QImage(
-                screenshot.bgra,
-                screenshot.width,
-                screenshot.height,
-                screenshot.width * 4,
+            # SM_XVIRTUALSCREEN, SM_YVIRTUALSCREEN = coordenadas do canto superior esquerdo
+            # SM_CXVIRTUALSCREEN, SM_CYVIRTUALSCREEN = dimensões totais
+            left = win32api.GetSystemMetrics(win32con.SM_XVIRTUALSCREEN)
+            top = win32api.GetSystemMetrics(win32con.SM_YVIRTUALSCREEN)
+            width = win32api.GetSystemMetrics(win32con.SM_CXVIRTUALSCREEN)
+            height = win32api.GetSystemMetrics(win32con.SM_CYVIRTUALSCREEN)
+
+            if width < 100 or height < 100:
+                return False
+
+            # Cria DC do desktop
+            desktop_dc = win32gui.GetDC(0)
+            img_dc = win32ui.CreateDCFromHandle(desktop_dc)
+            mem_dc = img_dc.CreateCompatibleDC()
+
+            # Cria bitmap
+            bitmap = win32ui.CreateBitmap()
+            bitmap.CreateCompatibleBitmap(img_dc, width, height)
+            mem_dc.SelectObject(bitmap)
+
+            # Captura com BitBlt (funciona com multi-GPU)
+            mem_dc.BitBlt(
+                (0, 0), (width, height),
+                img_dc, (left, top),
+                win32con.SRCCOPY
+            )
+
+            # Converte para QImage
+            bmp_info = bitmap.GetInfo()
+            bmp_bits = bitmap.GetBitmapBits(True)
+
+            # Limpa recursos Win32
+            win32gui.DeleteObject(bitmap.GetHandle())
+            mem_dc.DeleteDC()
+            img_dc.DeleteDC()
+            win32gui.ReleaseDC(0, desktop_dc)
+
+            # Cria QImage do buffer (formato BGRA)
+            import numpy as np
+            img_array = np.frombuffer(bmp_bits, dtype=np.uint8)
+            img_array = img_array.reshape((bmp_info['bmHeight'], bmp_info['bmWidth'], 4))
+
+            # Converte numpy array para QImage
+            qimg = QImage(
+                img_array.data,
+                bmp_info['bmWidth'],
+                bmp_info['bmHeight'],
+                bmp_info['bmWidth'] * 4,
                 QImage.Format.Format_ARGB32
             ).copy()
 
-            self._screenshot = QPixmap.fromImage(img)
+            self._screenshot = QPixmap.fromImage(qimg)
             self._screenshot_original = self._screenshot.copy()
             self._scale_x = 1.0
             self._scale_y = 1.0
 
-            self._offset = QPoint(monitor["left"], monitor["top"])
-            self.setGeometry(
-                monitor["left"],
-                monitor["top"],
-                monitor["width"],
-                monitor["height"]
-            )
+            self._offset = QPoint(left, top)
+            self.setGeometry(left, top, width, height)
+            return True
 
-    def _capture_screen_qt_fallback(self):
-        """Fallback usando Qt (tela primária)."""
+        except Exception:
+            return False
+
+    def _try_capture_qt_multiscreen(self) -> bool:
+        """Tenta captura usando Qt com múltiplas telas."""
+        try:
+            from PyQt6.QtGui import QImage
+
+            screens = QGuiApplication.screens()
+            if len(screens) < 2:
+                return False  # Apenas uma tela, usa método simples
+
+            # Calcula bounding box de todas as telas
+            min_x = min(s.geometry().x() for s in screens)
+            min_y = min(s.geometry().y() for s in screens)
+            max_x = max(s.geometry().x() + s.geometry().width() for s in screens)
+            max_y = max(s.geometry().y() + s.geometry().height() for s in screens)
+
+            total_width = max_x - min_x
+            total_height = max_y - min_y
+
+            if total_width < 100 or total_height < 100:
+                return False
+
+            # Cria pixmap combinado
+            combined = QPixmap(total_width, total_height)
+            combined.fill(QColor(0, 0, 0))
+
+            painter = QPainter(combined)
+
+            # Captura cada tela e posiciona no pixmap combinado
+            for screen in screens:
+                geom = screen.geometry()
+                grab = screen.grabWindow(0)
+
+                # Ajusta para DPI se necessário
+                dpr = screen.devicePixelRatio()
+                if dpr != 1.0:
+                    grab = grab.scaled(
+                        int(grab.width() / dpr),
+                        int(grab.height() / dpr),
+                        Qt.AspectRatioMode.IgnoreAspectRatio,
+                        Qt.TransformationMode.SmoothTransformation
+                    )
+
+                # Posição relativa ao bounding box
+                rel_x = geom.x() - min_x
+                rel_y = geom.y() - min_y
+                painter.drawPixmap(rel_x, rel_y, grab)
+
+            painter.end()
+
+            self._screenshot = combined
+            self._screenshot_original = combined.copy()
+            self._scale_x = 1.0
+            self._scale_y = 1.0
+
+            self._offset = QPoint(min_x, min_y)
+            self.setGeometry(min_x, min_y, total_width, total_height)
+            return True
+
+        except Exception:
+            return False
+
+    def _capture_qt_primary(self):
+        """Fallback final: captura apenas tela primária."""
         screen = QGuiApplication.primaryScreen()
         if not screen:
             self.close()

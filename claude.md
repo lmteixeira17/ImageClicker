@@ -11,32 +11,43 @@ ImageClicker é uma ferramenta de automação de cliques baseada em reconhecimen
 
 ```text
 ImageClicker/
+├── app_qt.py              # GUI - Entrada principal PyQt6
 ├── iclick.py              # CLI - Interface de linha de comando
-├── gui.py                 # GUI - Interface gráfica multi-task
 ├── images/                # Templates capturados (PNG)
 ├── scripts/               # Scripts de automação sequencial (JSON)
 ├── tasks.json             # Configuração de tasks paralelas
+├── core/                  # Módulo core
+│   ├── __init__.py        # Exports principais
+│   ├── task_manager.py    # Gerenciador de tasks paralelas
+│   ├── image_matcher.py   # Template matching com OpenCV
+│   └── window_utils.py    # Utilitários de janelas Windows
+├── ui_qt/                 # Interface PyQt6
+│   ├── main_window.py     # Janela principal
+│   ├── theme.py           # Tema glassmorphism
+│   ├── keyboard_manager.py # Atalhos de teclado globais
+│   ├── pages/             # Páginas da aplicação
+│   │   ├── base_page.py   # Classe base para páginas
+│   │   ├── dashboard.py   # Dashboard com logs em tempo real
+│   │   ├── tasks.py       # Gerenciamento de tasks (unificado)
+│   │   ├── templates.py   # Galeria de templates
+│   │   └── settings.py    # Configurações
+│   └── components/        # Componentes reutilizáveis
+│       ├── sidebar.py     # Navegação lateral
+│       ├── task_row.py    # Widget de task individual
+│       ├── edit_dialog.py # Dialog de edição (unificado)
+│       ├── glass_panel.py # Painéis glassmorphism
+│       ├── log_panel.py   # Painel de logs
+│       ├── toast_notification.py  # Notificações toast
+│       ├── help_dialog.py # Dialog de ajuda/atalhos
+│       ├── onboarding.py  # Onboarding para novos usuários
+│       ├── confirm_dialog.py # Dialog de confirmação
+│       └── icons.py       # Ícones Unicode
 ├── docs/                  # Documentação estruturada
-│   ├── README.md          # Índice da documentação
-│   ├── installation.md    # Guia de instalação
-│   ├── quickstart.md      # Início rápido
-│   ├── concepts.md        # Conceitos fundamentais
-│   ├── cli-guide.md       # Guia CLI completo
-│   ├── gui-guide.md       # Guia GUI completo
-│   ├── templates-guide.md # Gerenciamento de templates
-│   ├── tasks-guide.md     # Sistema de tasks
-│   ├── scripts-guide.md   # Scripts sequenciais
-│   ├── api-reference.md   # Referência técnica
-│   ├── architecture.md    # Arquitetura do sistema
-│   ├── configuration.md   # Configurações
-│   ├── faq.md             # Perguntas frequentes
-│   ├── troubleshooting.md # Solução de problemas
-│   └── best-practices.md  # Boas práticas
+│   └── ...                # Guias e referências
 ├── claude.md              # Este arquivo (instruções para agentes)
 ├── CHANGELOG.md           # Histórico de mudanças
-├── CONTRIBUTING.md        # Guia de contribuição
 ├── requirements.txt       # Dependências Python
-├── .markdownlint.json     # Config linting markdown
+├── .imageclicker_config.json # Config do usuário (auto-gerado)
 ├── iclick.bat             # Launcher Windows (CLI)
 ├── ImageClicker.bat       # Launcher Windows (GUI)
 └── final_icon.ico         # Ícone da aplicação
@@ -59,10 +70,11 @@ ImageClicker/
 ### Arquitetura
 
 - **CLI (iclick.py)**: Comandos para captura, clique, scripts e tasks
-- **GUI (app_qt.py)**: Interface gráfica PyQt6 com páginas (Dashboard, Tasks, Templates, Prompts, Settings)
+- **GUI (app_qt.py)**: Interface gráfica PyQt6 com páginas (Dashboard, Tasks, Templates, Settings)
 - **TaskManager**: Gerenciador de execução paralela com ThreadPoolExecutor
 - **Templates**: Imagens PNG para template matching (OpenCV TM_CCOEFF_NORMED)
 - **Ghost Click**: Cliques via PostMessage (não rouba foco)
+- **Tasks Unificadas**: Uma única entidade Task suporta modo simples e múltiplas opções
 
 ## Funcionalidades Principais
 
@@ -73,15 +85,19 @@ ImageClicker/
 - Suporte multi-monitor via virtual screen
 - Escalonamento automático de DPI
 
-### 2. Sistema de Tasks (Paralelo)
+### 2. Sistema de Tasks Unificado
 
+- **Dois modos em uma única entidade**:
+  - **Template Único**: Monitora uma imagem, clica quando encontrar
+  - **Múltiplas Opções**: Monitora N imagens, clica na selecionada quando TODAS visíveis
 - Execução simultânea de múltiplas automações
-- Cada task monitora uma janela específica (wildcards suportados)
+- Cada task monitora uma janela específica (por processo ou título)
 - **Busca multi-janela**: Encontra template em todas as instâncias do processo
 - Controle individual (play/stop por task)
-- **Threshold configurável**: Cada task/prompt pode ter seu próprio threshold (50-99%)
+- **Threshold configurável**: Cada task pode ter seu próprio threshold (50-99%)
 - Persistência em `tasks.json`
-- Status em tempo real
+- Status em tempo real com contadores de cliques
+- **Logging inteligente**: Evita repetição de logs idênticos
 
 ### 3. Clique Fantasma (Ghost Click)
 
@@ -90,23 +106,16 @@ ImageClicker/
 - Suporta click, double_click, right_click
 - Encontra controle filho automaticamente (botões, inputs, etc.)
 
-### 4. Sistema de Prompts
-
-- Monitora janelas aguardando prompts/diálogos
-- Múltiplas opções de resposta configuráveis
-- Threshold individual por prompt
-- Clica automaticamente na opção selecionada
-
-### 5. Captura Visual com OCR
+### 4. Captura Visual com OCR
 
 - Overlay fullscreen multi-monitor
 - Preview em tempo real com dimensões
 - **OCR automático**: Extrai texto do botão capturado (EasyOCR)
 - **DPI automático**: Detecta escala DPI da janela
-- Nome sugerido: `{TextoOCR}_{Processo}_{DPI}DPI`
+- Nome sugerido: `{TextoOCR}_{Processo}` (DPI removido do nome)
 - ESC para cancelar, botão direito para reiniciar
 
-### 6. Galeria de Templates
+### 5. Galeria de Templates
 
 - Grid de thumbnails 4 colunas (150x130px)
 - **Hover preview**: Preview ampliado ao passar o mouse
@@ -114,26 +123,34 @@ ImageClicker/
 - Teste, renomeação e exclusão de templates
 - Integração com Explorer
 
-### 7. Sistema de Atalhos de Teclado
+### 6. Sistema de Atalhos de Teclado
 
 - **Navegação**: Ctrl+1-5 para páginas
 - **Ações**: Ctrl+N (nova task), Ctrl+Shift+C (captura), Ctrl+E/Shift+S (start/stop all)
 - **Ajuda**: F1 ou Ctrl+H (lista de atalhos)
 - KeyboardManager centralizado em `ui_qt/keyboard_manager.py`
 
-### 8. Toast Notifications
+### 7. Toast Notifications
 
 - Feedback visual para ações do usuário
 - Tipos: success, error, warning, info
 - Auto-dismiss configurável
 - Empilhável (máx 3 visíveis)
 
-### 9. Onboarding
+### 8. Onboarding
 
 - Welcome modal na primeira execução
 - Tour guiado pelas páginas
 - Quick Start Checklist no Dashboard
 - Estado persistido em `.imageclicker_config.json`
+
+### 9. UX Profissional
+
+- **Tooltips informativos**: Todos os elementos têm dicas contextuais
+- **Sidebar com navegação por atalhos**: Ctrl+1 a Ctrl+4
+- **Feedback visual**: Estados de botões, animações de pulse em tasks ativas
+- **Combos editáveis**: Campos de janela/processo permitem digitação livre
+- **Botões de refresh**: Atualização dinâmica de listas de janelas/processos
 
 ## Comandos CLI Principais
 
