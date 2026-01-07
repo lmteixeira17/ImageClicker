@@ -1,0 +1,16 @@
+# ImageClicker Dependencies
+# Python 3.8+
+
+# Core automation
+pyautogui>=0.9.53
+
+# Image processing
+Pillow>=9.0.0
+opencv-python>=4.5.0
+numpy>=1.21.0
+
+# GUI
+customtkinter>=5.0.0
+
+# Windows API
+pywin32>=300

@@ -1,0 +1,30 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pip show:*)",
+      "Bash(dir:*)",
+      "Bash(ls:*)",
+      "Bash(wc:*)",
+      "Bash(python:*)",
+      "Bash(copy:*)",
+      "Bash(findstr:*)",
+      "Bash(cd:*)",
+      "Bash(powershell -Command \"Get-ChildItem -Recurse -Force | Select-Object FullName, Length\")",
+      "Bash(powershell -Command \"Get-Item -Force | Where-Object {$_Name -match ''\\(\\\\.claude|\\\\.github\\)''}\")",
+      "Bash(cat:*)",
+      "Bash(timeout 5 python:*)",
+      "Bash(pip install:*)",
+      "Bash(timeout 8 python:*)",
+      "Bash(powershell -Command \"cd ''c:\\\\Users\\\\catar\\\\OneDrive\\\\3. Projetos\\\\ProjetosPessoais\\\\ImageClicker''; python app_qt.py\")",
+      "Bash(powershell -Command \"cd ''c:\\\\Users\\\\catar\\\\OneDrive\\\\3. Projetos\\\\ProjetosPessoais\\\\ImageClicker''; python app_qt.py 2>&1\")",
+      "Bash(powershell -Command:*)",
+      "Bash(powershell -ExecutionPolicy Bypass -File:*)",
+      "Bash(cscript //Nologo ImageClicker.vbs)",
+      "Bash(where pythonw:*)",
+      "Bash(wscript:*)",
+      "Bash(timeout 10 python:*)",
+      "Bash(timeout 60 python:*)",
+      "Bash(timeout 30 python:*)"
+    ]
+  }
+}

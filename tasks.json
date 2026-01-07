@@ -1,0 +1,73 @@
+[
+  {
+    "id": 9,
+    "window_title": "",
+    "image_name": "",
+    "action": "click",
+    "repeat": true,
+    "interval": 1.0,
+    "enabled": true,
+    "task_type": "prompt_handler",
+    "window_method": "process",
+    "threshold": 0.85,
+    "process_name": "Code.exe",
+    "title_filter": "",
+    "window_index": 0,
+    "options": [
+      {
+        "name": "1",
+        "image": "Yes_Claude"
+      },
+      {
+        "name": "2",
+        "image": "Yes_Always_Claude"
+      }
+    ],
+    "selected_option": 1
+  },
+  {
+    "id": 10,
+    "window_title": "",
+    "image_name": "Accept_all_Antigravity",
+    "action": "click",
+    "repeat": true,
+    "interval": 10.0,
+    "enabled": true,
+    "task_type": "simple",
+    "window_method": "process",
+    "threshold": 0.85,
+    "process_name": "Antigravity.exe",
+    "title_filter": "",
+    "window_index": 0
+  },
+  {
+    "id": 11,
+    "window_title": "",
+    "image_name": "Antigravity_125DPI",
+    "action": "click",
+    "repeat": true,
+    "interval": 5.0,
+    "enabled": true,
+    "task_type": "simple",
+    "window_method": "process",
+    "threshold": 0.85,
+    "process_name": "Antigravity.exe",
+    "title_filter": "",
+    "window_index": 0
+  },
+  {
+    "id": 12,
+    "window_title": "",
+    "image_name": "Yes_and_dont_Code_125DPI",
+    "action": "click",
+    "repeat": true,
+    "interval": 5.0,
+    "enabled": true,
+    "task_type": "simple",
+    "window_method": "process",
+    "threshold": 0.5,
+    "process_name": "Code.exe",
+    "title_filter": "",
+    "window_index": 0
+  }
+]

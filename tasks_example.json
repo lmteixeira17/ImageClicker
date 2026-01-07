@@ -1,0 +1,41 @@
+[
+  {
+    "id": 1,
+    "window_title": "*Chrome*",
+    "image_name": "refresh_btn",
+    "action": "click",
+    "repeat": true,
+    "interval": 10,
+    "enabled": true,
+    "task_type": "simple",
+    "window_method": "title"
+  },
+  {
+    "id": 2,
+    "window_title": "",
+    "image_name": "send_button",
+    "action": "click",
+    "repeat": true,
+    "interval": 5,
+    "enabled": true,
+    "task_type": "simple",
+    "window_method": "process",
+    "process_name": "Code.exe",
+    "title_filter": "Chat",
+    "window_index": 0
+  },
+  {
+    "id": 3,
+    "window_title": "",
+    "image_name": "play_btn",
+    "action": "click",
+    "repeat": false,
+    "interval": 0,
+    "enabled": true,
+    "task_type": "simple",
+    "window_method": "process",
+    "process_name": "Spotify.exe",
+    "title_filter": "",
+    "window_index": 0
+  }
+]
