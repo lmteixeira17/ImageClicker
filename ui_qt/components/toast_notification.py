@@ -1,20 +1,20 @@
 """
 Sistema de notificações toast para feedback visual.
 Toasts aparecem no canto inferior direito e desaparecem automaticamente.
+Design moderno com fundo sólido e boa visibilidade.
 """
 
 from typing import Optional, List
 from PyQt6.QtWidgets import (
     QFrame, QLabel, QHBoxLayout, QPushButton,
-    QGraphicsOpacityEffect, QApplication
+    QGraphicsOpacityEffect, QGraphicsDropShadowEffect,
+    QApplication
 )
 from PyQt6.QtCore import (
     Qt, QTimer, QPropertyAnimation, QEasingCurve,
-    pyqtSignal, QPoint
+    pyqtSignal
 )
-from PyQt6.QtGui import QFont
-
-from ..theme import Theme
+from PyQt6.QtGui import QColor
 
 
 class Toast(QFrame):
@@ -38,20 +38,40 @@ class Toast(QFrame):
         "info": 3000,
     }
 
-    # Ícones por tipo (emoji)
+    # Ícones por tipo
     ICONS = {
-        "success": "✅",
-        "error": "❌",
-        "warning": "⚠️",
-        "info": "ℹ️",
+        "success": "✓",
+        "error": "✕",
+        "warning": "⚠",
+        "info": "ℹ",
     }
 
-    # Cores por tipo
+    # Cores por tipo (fundo, borda, ícone)
     COLORS = {
-        "success": Theme.SUCCESS,
-        "error": Theme.DANGER,
-        "warning": Theme.WARNING,
-        "info": Theme.ACCENT_SECONDARY,
+        "success": {
+            "bg": "#065f46",       # Verde escuro
+            "border": "#10b981",   # Verde
+            "icon_bg": "#10b981",  # Verde
+            "text": "#ecfdf5",     # Branco esverdeado
+        },
+        "error": {
+            "bg": "#7f1d1d",       # Vermelho escuro
+            "border": "#ef4444",   # Vermelho
+            "icon_bg": "#ef4444",  # Vermelho
+            "text": "#fef2f2",     # Branco avermelhado
+        },
+        "warning": {
+            "bg": "#78350f",       # Laranja escuro
+            "border": "#f59e0b",   # Laranja
+            "icon_bg": "#f59e0b",  # Laranja
+            "text": "#fffbeb",     # Branco amarelado
+        },
+        "info": {
+            "bg": "#1e3a5f",       # Azul escuro
+            "border": "#3b82f6",   # Azul
+            "icon_bg": "#3b82f6",  # Azul
+            "text": "#eff6ff",     # Branco azulado
+        },
     }
 
     def __init__(
@@ -79,37 +99,68 @@ class Toast(QFrame):
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
 
-        # Container principal
-        color = self.COLORS.get(self.toast_type, Theme.ACCENT_SECONDARY)
-        icon = self.ICONS.get(self.toast_type, "ℹ️")
+        # Cores do tipo
+        colors = self.COLORS.get(self.toast_type, self.COLORS["info"])
+        icon = self.ICONS.get(self.toast_type, "ℹ")
 
+        # Container com fundo sólido e sombra
         self.setStyleSheet(f"""
             QFrame {{
-                background: {Theme.BG_PRIMARY};
-                border: 1px solid {color};
-                border-left: 4px solid {color};
+                background-color: {colors['bg']};
+                border: 2px solid {colors['border']};
                 border-radius: 8px;
             }}
         """)
 
+        # Sombra para destacar do fundo
+        shadow = QGraphicsDropShadowEffect(self)
+        shadow.setBlurRadius(20)
+        shadow.setXOffset(0)
+        shadow.setYOffset(4)
+        shadow.setColor(QColor(0, 0, 0, 150))
+        self.setGraphicsEffect(shadow)
+
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(12, 10, 12, 10)
+        layout.setContentsMargins(4, 8, 12, 8)
         layout.setSpacing(10)
 
-        # Ícone
-        icon_label = QLabel(icon)
-        icon_label.setStyleSheet(f"""
-            font-size: 16px;
-            background: transparent;
+        # Ícone em círculo colorido
+        icon_container = QFrame()
+        icon_container.setFixedSize(28, 28)
+        icon_container.setStyleSheet(f"""
+            QFrame {{
+                background-color: {colors['icon_bg']};
+                border: none;
+                border-radius: 14px;
+            }}
         """)
-        layout.addWidget(icon_label)
+        icon_layout = QHBoxLayout(icon_container)
+        icon_layout.setContentsMargins(0, 0, 0, 0)
+
+        icon_label = QLabel(icon)
+        icon_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        icon_label.setStyleSheet(f"""
+            QLabel {{
+                font-size: 14px;
+                font-weight: bold;
+                color: white;
+                background: transparent;
+                border: none;
+            }}
+        """)
+        icon_layout.addWidget(icon_label)
+        layout.addWidget(icon_container)
 
         # Mensagem
         msg_label = QLabel(self.message)
         msg_label.setStyleSheet(f"""
-            font-size: 13px;
-            color: {Theme.TEXT_PRIMARY};
-            background: transparent;
+            QLabel {{
+                font-size: 13px;
+                font-weight: 500;
+                color: {colors['text']};
+                background: transparent;
+                border: none;
+            }}
         """)
         msg_label.setWordWrap(True)
         msg_label.setMaximumWidth(280)
@@ -117,17 +168,18 @@ class Toast(QFrame):
 
         # Botão fechar
         close_btn = QPushButton("×")
-        close_btn.setFixedSize(20, 20)
+        close_btn.setFixedSize(24, 24)
         close_btn.setStyleSheet(f"""
             QPushButton {{
-                background: transparent;
+                background: rgba(255, 255, 255, 0.1);
                 border: none;
-                color: {Theme.TEXT_MUTED};
+                border-radius: 12px;
+                color: {colors['text']};
                 font-size: 16px;
                 font-weight: bold;
             }}
             QPushButton:hover {{
-                color: {Theme.TEXT_PRIMARY};
+                background: rgba(255, 255, 255, 0.2);
             }}
         """)
         close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -136,47 +188,51 @@ class Toast(QFrame):
 
         # Ajusta tamanho
         self.adjustSize()
-        self.setFixedHeight(self.sizeHint().height())
-        self.setMinimumWidth(300)
+        self.setFixedHeight(max(self.sizeHint().height(), 48))
+        self.setMinimumWidth(280)
         self.setMaximumWidth(400)
 
     def _setup_animations(self):
         """Configura animações de entrada/saída."""
-        # Efeito de opacidade
+        # Efeito de opacidade (precisa ser separado do shadow)
         self._opacity_effect = QGraphicsOpacityEffect(self)
-        self.setGraphicsEffect(self._opacity_effect)
-        self._opacity_effect.setOpacity(0)
-
-        # Animação de fade in
-        self._fade_in = QPropertyAnimation(self._opacity_effect, b"opacity")
-        self._fade_in.setDuration(200)
-        self._fade_in.setStartValue(0)
-        self._fade_in.setEndValue(1)
-        self._fade_in.setEasingCurve(QEasingCurve.Type.OutCubic)
-
-        # Animação de fade out
-        self._fade_out = QPropertyAnimation(self._opacity_effect, b"opacity")
-        self._fade_out.setDuration(200)
-        self._fade_out.setStartValue(1)
-        self._fade_out.setEndValue(0)
-        self._fade_out.setEasingCurve(QEasingCurve.Type.InCubic)
-        self._fade_out.finished.connect(self._on_fade_out_finished)
+        # Nota: não podemos ter dois efeitos, então usamos apenas o shadow
+        # e controlamos visibilidade de outra forma
 
         # Timer para auto-close
         self._close_timer = QTimer(self)
         self._close_timer.setSingleShot(True)
         self._close_timer.timeout.connect(self.close_toast)
 
+        # Timer para fade out
+        self._fade_timer = QTimer(self)
+        self._fade_timer.setInterval(16)  # ~60fps
+        self._fade_timer.timeout.connect(self._fade_step)
+        self._fade_value = 1.0
+        self._fading_out = False
+
+    def _fade_step(self):
+        """Passo da animação de fade."""
+        if self._fading_out:
+            self._fade_value -= 0.1
+            if self._fade_value <= 0:
+                self._fade_timer.stop()
+                self._on_fade_out_finished()
+            else:
+                self.setWindowOpacity(self._fade_value)
+
     def show_toast(self):
         """Mostra o toast com animação."""
+        self._fade_value = 1.0
+        self.setWindowOpacity(1.0)
         self.show()
-        self._fade_in.start()
         self._close_timer.start(self._duration)
 
     def close_toast(self):
         """Fecha o toast com animação."""
         self._close_timer.stop()
-        self._fade_out.start()
+        self._fading_out = True
+        self._fade_timer.start()
 
     def _on_fade_out_finished(self):
         """Callback quando fade out termina."""
@@ -192,9 +248,9 @@ class ToastManager:
     """
 
     MAX_VISIBLE = 3
-    SPACING = 10
-    MARGIN_RIGHT = 20
-    MARGIN_BOTTOM = 20
+    SPACING = 8
+    MARGIN_RIGHT = 24
+    MARGIN_BOTTOM = 24
 
     def __init__(self, parent=None):
         self.parent = parent
@@ -236,16 +292,11 @@ class ToastManager:
 
     def _reposition_toasts(self):
         """Reposiciona todos os toasts visíveis."""
-        if not self.parent:
+        screen = QApplication.primaryScreen()
+        if not screen:
             return
 
-        # Obtém geometria da janela pai
-        parent_rect = self.parent.geometry()
-        screen = QApplication.primaryScreen()
-        if screen:
-            screen_rect = screen.availableGeometry()
-        else:
-            screen_rect = parent_rect
+        screen_rect = screen.availableGeometry()
 
         # Posição inicial (canto inferior direito)
         x = screen_rect.right() - self.MARGIN_RIGHT

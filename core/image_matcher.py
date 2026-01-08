@@ -26,6 +26,41 @@ PW_CLIENTONLY = 1
 PW_RENDERFULLCONTENT = 2  # Windows 8.1+, captura conteúdo mesmo em background
 
 
+def get_template_dpi(template_path: Path) -> float:
+    """Lê o DPI de captura dos metadados do template PNG.
+
+    O DPI é salvo durante a captura para permitir escalonamento
+    correto quando a janela alvo tem DPI diferente.
+
+    Args:
+        template_path: Caminho para o arquivo PNG do template
+
+    Returns:
+        Escala DPI (1.0 = 96 DPI/100%, 1.25 = 120 DPI/125%, etc.)
+        Retorna 1.0 se não encontrar metadados (assume 100%)
+    """
+    try:
+        from PIL import Image
+
+        with Image.open(template_path) as img:
+            # Primeiro tenta metadado customizado ImageClicker_DPI
+            if hasattr(img, 'text') and 'ImageClicker_DPI' in img.text:
+                dpi_value = int(img.text['ImageClicker_DPI'])
+                return dpi_value / 96.0
+
+            # Fallback: usa DPI do campo pHYs/dpi
+            if hasattr(img, 'info') and 'dpi' in img.info:
+                dpi_x = img.info['dpi'][0]
+                if dpi_x > 0:
+                    return dpi_x / 96.0
+
+    except Exception:
+        pass
+
+    # Assume 100% DPI se não conseguir ler (templates antigos)
+    return 1.0
+
+
 def capture_window(hwnd: int) -> Optional[np.ndarray]:
     """
     Captura o conteúdo de uma janela usando PrintWindow API.
@@ -139,9 +174,15 @@ def find_and_click(
             return False, 'Template não encontrado', 0.0
         debug(f"  Template shape original: {template.shape}, path: {template_path.name}")
 
-        # Detecta DPI e escala template se necessário
-        dpi_scale = get_window_dpi_scale(hwnd)
-        debug(f"  DPI scale detectado: {dpi_scale:.2f} ({int(dpi_scale * 100)}%)")
+        # Calcula escala necessária baseado no DPI do template vs DPI da janela
+        # template_dpi: DPI em que o template foi capturado
+        # window_dpi: DPI atual da janela alvo
+        # Se template foi capturado em 125% e janela está em 100%, precisa reduzir
+        # Se template foi capturado em 100% e janela está em 125%, precisa aumentar
+        template_dpi = get_template_dpi(template_path)
+        window_dpi = get_window_dpi_scale(hwnd)
+        dpi_scale = window_dpi / template_dpi  # Escala relativa
+        debug(f"  Template DPI: {template_dpi:.2f} ({int(template_dpi * 100)}%), Window DPI: {window_dpi:.2f} ({int(window_dpi * 100)}%), Scale: {dpi_scale:.2f}")
 
         if abs(dpi_scale - 1.0) > 0.05:  # Diferença significativa (>5%)
             original_h, original_w = template.shape
@@ -274,8 +315,11 @@ def check_template_visible(
         if template is None:
             return False, 0.0
 
-        # Detecta DPI e escala template se necessário
-        dpi_scale = get_window_dpi_scale(hwnd)
+        # Calcula escala baseado no DPI do template vs DPI da janela
+        template_dpi = get_template_dpi(template_path)
+        window_dpi = get_window_dpi_scale(hwnd)
+        dpi_scale = window_dpi / template_dpi
+
         if abs(dpi_scale - 1.0) > 0.05:
             new_w = int(template.shape[1] * dpi_scale)
             new_h = int(template.shape[0] * dpi_scale)
@@ -321,7 +365,11 @@ def find_template_location(
         if template is None:
             return None
 
-        dpi_scale = get_window_dpi_scale(hwnd)
+        # Calcula escala baseado no DPI do template vs DPI da janela
+        template_dpi = get_template_dpi(template_path)
+        window_dpi = get_window_dpi_scale(hwnd)
+        dpi_scale = window_dpi / template_dpi
+
         if abs(dpi_scale - 1.0) > 0.05:
             new_w = int(template.shape[1] * dpi_scale)
             new_h = int(template.shape[0] * dpi_scale)

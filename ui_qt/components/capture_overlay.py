@@ -191,10 +191,20 @@ def generate_template_name(text: str, process: str) -> str:
 class CaptureOverlay(QWidget):
     """Overlay fullscreen para captura de região."""
 
-    def __init__(self, save_dir: Path, on_complete=None, parent=None):
+    def __init__(self, save_dir: Path, on_complete=None, parent=None, fixed_output_path: Path = None):
+        """Inicializa overlay de captura.
+
+        Args:
+            save_dir: Diretório onde salvar capturas
+            on_complete: Callback chamado após salvar (recebe Path)
+            parent: Widget pai
+            fixed_output_path: Se fornecido, salva diretamente neste caminho
+                              sem pedir nome (usado para recaptura)
+        """
         super().__init__(parent)
         self.save_dir = save_dir
         self.on_complete = on_complete
+        self._fixed_output_path = fixed_output_path
 
         self._start_pos = None
         self._current_pos = None
@@ -265,8 +275,11 @@ class CaptureOverlay(QWidget):
 
                 self._screenshot = QPixmap.fromImage(img)
                 self._screenshot_original = self._screenshot.copy()
-                self._scale_x = 1.0
-                self._scale_y = 1.0
+
+                # MSS captura em pixels físicos - detecta DPI da tela primária
+                primary = QGuiApplication.primaryScreen()
+                self._scale_x = primary.devicePixelRatio() if primary else 1.0
+                self._scale_y = self._scale_x
 
                 self._offset = QPoint(monitor["left"], monitor["top"])
                 self.setGeometry(
@@ -346,8 +359,11 @@ class CaptureOverlay(QWidget):
 
             self._screenshot = QPixmap.fromImage(qimg)
             self._screenshot_original = self._screenshot.copy()
-            self._scale_x = 1.0
-            self._scale_y = 1.0
+
+            # Win32 captura em pixels físicos - detecta DPI da tela primária
+            primary = QGuiApplication.primaryScreen()
+            self._scale_x = primary.devicePixelRatio() if primary else 1.0
+            self._scale_y = self._scale_x
 
             self._offset = QPoint(left, top)
             self.setGeometry(left, top, width, height)
@@ -559,7 +575,17 @@ class CaptureOverlay(QWidget):
         else:
             cropped = self._screenshot.copy(rect)
 
-        # Gera nome sugerido
+        # Modo recaptura: salva diretamente sem pedir nome
+        if self._fixed_output_path:
+            self._save_with_dpi_metadata(cropped, self._fixed_output_path)
+
+            if self.on_complete:
+                self.on_complete(self._fixed_output_path)
+
+            self.close()
+            return
+
+        # Modo normal: pede nome para salvar
         suggested_name = "template"
         try:
             text = extract_text_from_image(cropped)
@@ -579,12 +605,57 @@ class CaptureOverlay(QWidget):
                 name += '.png'
 
             path = self.save_dir / name
-            cropped.save(str(path), "PNG")
+
+            # Salva com metadados de DPI para escalonamento correto no matching
+            self._save_with_dpi_metadata(cropped, path)
 
             if self.on_complete:
                 self.on_complete(path)
 
         self.close()
+
+    def _save_with_dpi_metadata(self, pixmap: QPixmap, path: Path):
+        """Salva imagem PNG com metadados de DPI para escalonamento correto.
+
+        Armazena o DPI de captura nos metadados PNG (campo pHYs) para que
+        o sistema de matching possa calcular a escala correta quando a
+        janela alvo tiver DPI diferente.
+
+        Args:
+            pixmap: QPixmap com a imagem capturada
+            path: Caminho onde salvar o arquivo
+        """
+        # Detecta DPI do sistema usando Win32 API
+        # GetDeviceCaps é mais confiável que GetDpiForSystem em apps Qt
+        try:
+            import ctypes
+            user32 = ctypes.windll.user32
+            gdi32 = ctypes.windll.gdi32
+            hdc = user32.GetDC(0)
+            capture_dpi = gdi32.GetDeviceCaps(hdc, 88)  # LOGPIXELSX = 88
+            user32.ReleaseDC(0, hdc)
+            if capture_dpi < 96:
+                capture_dpi = 96
+        except Exception:
+            capture_dpi = 96  # Fallback para 100%
+
+        from PIL import Image
+        from PIL.PngImagePlugin import PngInfo
+
+        # Primeiro salva com Qt
+        pixmap.save(str(path), "PNG")
+
+        # Adiciona metadados de DPI
+        try:
+            pil_image = Image.open(str(path))
+            img_copy = pil_image.copy()
+            pil_image.close()
+
+            metadata = PngInfo()
+            metadata.add_text("ImageClicker_DPI", str(capture_dpi))
+            img_copy.save(str(path), "PNG", pnginfo=metadata, dpi=(capture_dpi, capture_dpi))
+        except Exception:
+            pass  # Arquivo já foi salvo pelo Qt
 
     def closeEvent(self, event):
         """Limpa recursos ao fechar."""

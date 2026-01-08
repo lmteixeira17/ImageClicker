@@ -301,6 +301,13 @@ class TemplatesPage(BasePage):
         self.rename_btn.setEnabled(False)
         preview_layout.addWidget(self.rename_btn)
 
+        self.recapture_btn = QPushButton(f"{Icons.CAPTURE} Recapturar")
+        self.recapture_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.recapture_btn.setToolTip("Capturar nova imagem mantendo o mesmo nome\nÚtil para atualizar template sem quebrar tasks existentes")
+        self.recapture_btn.clicked.connect(self._recapture_template)
+        self.recapture_btn.setEnabled(False)
+        preview_layout.addWidget(self.recapture_btn)
+
         self.delete_btn = QPushButton(f"{Icons.DELETE} Excluir")
         self.delete_btn.setProperty("variant", "danger")
         self.delete_btn.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -389,6 +396,7 @@ class TemplatesPage(BasePage):
 
             self.test_btn.setEnabled(True)
             self.rename_btn.setEnabled(True)
+            self.recapture_btn.setEnabled(True)
             self.delete_btn.setEnabled(True)
 
         except Exception as e:
@@ -428,11 +436,15 @@ class TemplatesPage(BasePage):
             best_window = None
             found_location = None
 
+            # Threshold padrão do sistema (85%)
+            from core.image_matcher import MATCH_THRESHOLD
+            test_threshold = MATCH_THRESHOLD
+
             # Busca em todas as janelas (igual ao app real)
             for hwnd, title in all_windows:
                 try:
                     # Usa check_template_visible (mesma função do core)
-                    visible, match = check_template_visible(hwnd, self._selected_path, threshold=0.60)
+                    visible, match = check_template_visible(hwnd, self._selected_path, threshold=test_threshold)
 
                     if match > best_match:
                         best_match = match
@@ -483,7 +495,8 @@ class TemplatesPage(BasePage):
             elif best_match > 0:
                 # Não encontrou mas teve algum match
                 window_name = best_window[1][:30] if best_window else "?"
-                msg = f"Não encontrado. Melhor match: {conf_pct}% em '{window_name}' (mínimo: 60%)"
+                threshold_pct = int(test_threshold * 100)
+                msg = f"Não encontrado. Melhor match: {conf_pct}% em '{window_name}' (mínimo: {threshold_pct}%)"
                 self.log(f"{Icons.WARNING} {msg}", "warning")
 
                 if hasattr(self.app, 'toast'):
@@ -541,6 +554,55 @@ class TemplatesPage(BasePage):
             except Exception as e:
                 self.log(f"Erro ao renomear: {e}", "error")
 
+    def _recapture_template(self):
+        """Recaptura template mantendo o mesmo nome."""
+        if not self._selected_path:
+            return
+
+        template_name = self._selected_path.stem
+
+        # Confirma com o usuário
+        if not ConfirmDialog.confirm(
+            self,
+            title="Recapturar Template",
+            message=f"Substituir '{template_name}' por uma nova captura?\n\nO template atual será sobrescrito.",
+            danger=False
+        ):
+            return
+
+        # Salva o caminho para usar no callback
+        self._recapture_path = self._selected_path
+
+        # Minimiza janela principal
+        self.app.showMinimized()
+
+        # Aguarda minimização e inicia captura
+        from PyQt6.QtCore import QTimer
+        QTimer.singleShot(200, self._show_recapture_overlay)
+
+    def _show_recapture_overlay(self):
+        """Mostra overlay para recaptura."""
+        from ..components.capture_overlay import CaptureOverlay
+
+        self._capture_overlay = CaptureOverlay(
+            save_dir=self.images_dir,
+            on_complete=self._on_recapture_complete,
+            fixed_output_path=self._recapture_path
+        )
+        self._capture_overlay.start()
+
+    def _on_recapture_complete(self, path: Path):
+        """Callback quando recaptura termina."""
+        self.app.showNormal()
+        self.log(f"{Icons.SUCCESS} Template atualizado: {path.stem}")
+
+        if hasattr(self.app, 'toast'):
+            self.app.toast.success(f"Template '{path.stem}' atualizado!")
+
+        # Atualiza galeria e re-seleciona o template
+        self.refresh()
+        self._on_select(path)
+
     def _delete_template(self):
         """Exclui template com confirmação."""
         if not self._selected_path:
@@ -569,6 +631,7 @@ class TemplatesPage(BasePage):
         self.size_label.setText("")
         self.test_btn.setEnabled(False)
         self.rename_btn.setEnabled(False)
+        self.recapture_btn.setEnabled(False)
         self.delete_btn.setEnabled(False)
 
     def _open_folder(self):
