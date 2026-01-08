@@ -105,14 +105,21 @@ class MiniTaskRow(QFrame):
 
         # Mostra info diferente para tasks simples vs múltiplas opções
         if task.task_type == "prompt_handler" and task.options:
-            opts_count = len(task.options)
-            selected = task.options[task.selected_option]["name"] if task.selected_option < len(task.options) else "?"
-            info_text = f"<span style='color:{Theme.ACCENT_SECONDARY}'>{opts_count} opções: {selected}</span> · <span style='color:{Theme.ACCENT_PRIMARY}'>{task.interval}s</span> · <span style='color:{Theme.TEXT_MUTED}'>{threshold_pct}%</span>"
+            # Lista todos os nomes das opções
+            opt_names = [o["name"] for o in task.options]
+            # Destaca a opção selecionada
+            selected_name = opt_names[task.selected_option] if task.selected_option < len(opt_names) else "?"
+            # Mostra: "opção1, opção2 → selecionada"
+            all_opts = ", ".join(opt_names)
+            if len(all_opts) > 35:
+                all_opts = all_opts[:32] + "..."
+            info_text = f"<span style='color:{Theme.TEXT_SECONDARY}'>{all_opts}</span> → <span style='color:{Theme.ACCENT_PRIMARY}'>{selected_name}</span> · <span style='color:{Theme.TEXT_MUTED}'>{task.interval}s · {threshold_pct}%</span>"
         else:
-            info_text = f"<span style='color:{Theme.TEXT_SECONDARY}'>{task.image_name}</span> · <span style='color:{Theme.ACCENT_PRIMARY}'>{task.interval}s</span> · <span style='color:{Theme.TEXT_MUTED}'>{threshold_pct}%</span>"
+            info_text = f"<span style='color:{Theme.ACCENT_SECONDARY}'>{task.image_name}</span> · <span style='color:{Theme.TEXT_MUTED}'>{task.interval}s · {threshold_pct}%</span>"
 
         template_lbl = QLabel(info_text)
         template_lbl.setStyleSheet("font-size: 11px;")
+        template_lbl.setToolTip(self._build_task_tooltip(task))
         info_layout.addWidget(template_lbl)
 
         main_layout.addLayout(info_layout, 1)
@@ -153,6 +160,24 @@ class MiniTaskRow(QFrame):
         self.status_dot.setText(Icons.RUNNING if self.is_running else Icons.STOPPED)
         color = Theme.STATUS_RUNNING if self.is_running else Theme.STATUS_STOPPED
         self.status_dot.setStyleSheet(f"color: {color}; font-size: 12px;")
+
+    def _build_task_tooltip(self, task) -> str:
+        """Constrói tooltip detalhado para a task."""
+        lines = [f"Task #{task.id}"]
+        lines.append(f"Janela: {task.process_name or task.window_title}")
+
+        if task.task_type == "prompt_handler" and task.options:
+            lines.append(f"\nOpções ({len(task.options)}):")
+            for i, opt in enumerate(task.options):
+                marker = "→ " if i == task.selected_option else "   "
+                lines.append(f"{marker}{opt['name']} ({opt['image']})")
+        else:
+            lines.append(f"Template: {task.image_name}")
+
+        lines.append(f"\nIntervalo: {task.interval}s")
+        lines.append(f"Threshold: {int(task.threshold * 100)}%")
+
+        return "\n".join(lines)
 
 
 class DashboardPage(BasePage):

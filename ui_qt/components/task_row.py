@@ -127,10 +127,21 @@ class TaskRow(QFrame):
 
         # Template ou opções
         if options:
-            # Modo múltiplas opções
-            opt_names = ", ".join([o["name"] for o in options])
-            opts_label = QLabel(f"<b style='color:{Theme.TEXT_SECONDARY}'>{len(options)} opções:</b>")
-            opts_label.setToolTip(f"Modo múltiplas opções\nOpções: {opt_names}\nClica quando TODAS estiverem visíveis")
+            # Modo múltiplas opções - mostra nomes das opções
+            opt_names = [o["name"] for o in options]
+            opt_images = [o["image"] for o in options]
+            all_opts_display = ", ".join(opt_names)
+            if len(all_opts_display) > 40:
+                all_opts_display = all_opts_display[:37] + "..."
+
+            # Tooltip detalhado com imagens
+            tooltip_lines = ["Modo múltiplas opções", "Clica quando TODAS estiverem visíveis", ""]
+            for i, opt in enumerate(options):
+                marker = "→ " if i == selected_option else "   "
+                tooltip_lines.append(f"{marker}{opt['name']} ({opt['image']}.png)")
+
+            opts_label = QLabel(f"<b style='color:{Theme.TEXT_SECONDARY}'>{len(options)} opções:</b> <span style='color:{Theme.TEXT_PRIMARY}'>{all_opts_display}</span>")
+            opts_label.setToolTip("\n".join(tooltip_lines))
             row1.addWidget(opts_label)
 
             self.options_combo = QComboBox()
