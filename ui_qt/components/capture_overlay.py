@@ -575,9 +575,18 @@ class CaptureOverlay(QWidget):
         else:
             cropped = self._screenshot.copy(rect)
 
+        # Calcula posição absoluta da seleção (para detectar monitor)
+        selection_center = rect.center()
+        if hasattr(self, '_offset'):
+            abs_x = self._offset.x() + selection_center.x()
+            abs_y = self._offset.y() + selection_center.y()
+        else:
+            abs_x = selection_center.x()
+            abs_y = selection_center.y()
+
         # Modo recaptura: salva diretamente sem pedir nome
         if self._fixed_output_path:
-            self._save_with_dpi_metadata(cropped, self._fixed_output_path)
+            self._save_with_dpi_metadata(cropped, self._fixed_output_path, abs_x, abs_y)
 
             if self.on_complete:
                 self.on_complete(self._fixed_output_path)
@@ -607,14 +616,14 @@ class CaptureOverlay(QWidget):
             path = self.save_dir / name
 
             # Salva com metadados de DPI para escalonamento correto no matching
-            self._save_with_dpi_metadata(cropped, path)
+            self._save_with_dpi_metadata(cropped, path, abs_x, abs_y)
 
             if self.on_complete:
                 self.on_complete(path)
 
         self.close()
 
-    def _save_with_dpi_metadata(self, pixmap: QPixmap, path: Path):
+    def _save_with_dpi_metadata(self, pixmap: QPixmap, path: Path, screen_x: int = 0, screen_y: int = 0):
         """Salva imagem PNG com metadados de DPI para escalonamento correto.
 
         Armazena o DPI de captura nos metadados PNG (campo pHYs) para que
@@ -624,20 +633,33 @@ class CaptureOverlay(QWidget):
         Args:
             pixmap: QPixmap com a imagem capturada
             path: Caminho onde salvar o arquivo
+            screen_x: Coordenada X absoluta da seleção (para detectar monitor)
+            screen_y: Coordenada Y absoluta da seleção (para detectar monitor)
         """
-        # Detecta DPI do sistema usando Win32 API
-        # GetDeviceCaps é mais confiável que GetDpiForSystem em apps Qt
+        # Detecta DPI do monitor onde a seleção foi feita
+        capture_dpi = 96  # Default 100%
+
         try:
-            import ctypes
-            user32 = ctypes.windll.user32
-            gdi32 = ctypes.windll.gdi32
-            hdc = user32.GetDC(0)
-            capture_dpi = gdi32.GetDeviceCaps(hdc, 88)  # LOGPIXELSX = 88
-            user32.ReleaseDC(0, hdc)
+            # Primeiro tenta encontrar o monitor pela posição
+            from PyQt6.QtCore import QPoint
+            screen = QGuiApplication.screenAt(QPoint(screen_x, screen_y))
+
+            if screen:
+                # Encontrou o monitor - usa seu DPI
+                capture_dpi = int(96 * screen.devicePixelRatio())
+            else:
+                # Fallback: usa Win32 API para DPI do sistema
+                import ctypes
+                user32 = ctypes.windll.user32
+                gdi32 = ctypes.windll.gdi32
+                hdc = user32.GetDC(0)
+                capture_dpi = gdi32.GetDeviceCaps(hdc, 88)  # LOGPIXELSX = 88
+                user32.ReleaseDC(0, hdc)
+
             if capture_dpi < 96:
                 capture_dpi = 96
         except Exception:
-            capture_dpi = 96  # Fallback para 100%
+            capture_dpi = 96
 
         from PIL import Image
         from PIL.PngImagePlugin import PngInfo
