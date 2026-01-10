@@ -16,8 +16,8 @@ class Theme:
     BG_GLASS_LIGHTER = "#2d2d4a"
 
     # Bordas
-    GLASS_BORDER = "#3a3a5c"
-    GLASS_BORDER_LIGHT = "#4a4a7c"
+    GLASS_BORDER = "#4a4a6c"
+    GLASS_BORDER_LIGHT = "#5a5a8c"
 
     # Accent
     ACCENT_PRIMARY = "#6366f1"
@@ -33,12 +33,12 @@ class Theme:
 
     # Texto
     TEXT_PRIMARY = "#f8fafc"
-    TEXT_SECONDARY = "#94a3b8"
-    TEXT_MUTED = "#64748b"
+    TEXT_SECONDARY = "#a8b8d1"
+    TEXT_MUTED = "#8b9bb8"
 
     # Status
     STATUS_RUNNING = "#10b981"
-    STATUS_STOPPED = "#6b7280"
+    STATUS_STOPPED = "#94a3b8"
 
     # Dimensões
     SIDEBAR_WIDTH = 200
