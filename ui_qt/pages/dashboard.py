@@ -16,36 +16,59 @@ from ..theme import Theme
 
 
 class StatCard(QFrame):
-    """Card de estatística."""
+    """Card de estatística - Design flat e colorido."""
 
     def __init__(self, icon: str, value: str, label: str, color: str = None, parent=None):
         super().__init__(parent)
-        self.setProperty("class", "glass-panel")
-        self.setFixedHeight(80)
+        self.setFixedHeight(100)  # Maior
 
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(12, 8, 12, 8)
+        # Cor de fundo baseada no tipo
+        bg_color = color or Theme.ACCENT_PRIMARY
+        self.setStyleSheet(f"""
+            StatCard {{
+                background-color: {bg_color}20;
+                border: 2px solid {bg_color};
+                border-radius: 12px;
+            }}
+        """)
 
-        # Valor grande
-        self.value_label = QLabel(f"{icon} {value}")
-        self.value_label.setStyleSheet(f"font-size: 24px; font-weight: bold; color: {color or Theme.TEXT_PRIMARY};")
-        layout.addWidget(self.value_label)
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(16, 12, 16, 12)
+        layout.setSpacing(12)
 
-        # Label
+        # Ícone grande à esquerda
+        icon_label = QLabel(icon)
+        icon_label.setStyleSheet(f"font-size: 32px; color: {bg_color};")
+        icon_label.setFixedWidth(45)
+        layout.addWidget(icon_label)
+
+        # Info à direita
+        info_layout = QVBoxLayout()
+        info_layout.setSpacing(2)
+
+        # Valor GRANDE
+        self.value_label = QLabel(value)
+        self.value_label.setStyleSheet(f"font-size: 36px; font-weight: bold; color: {Theme.TEXT_PRIMARY};")
+        info_layout.addWidget(self.value_label)
+
+        # Label menor
         desc_label = QLabel(label)
-        desc_label.setProperty("variant", "secondary")
-        layout.addWidget(desc_label)
+        desc_label.setStyleSheet(f"font-size: 13px; color: {Theme.TEXT_SECONDARY};")
+        info_layout.addWidget(desc_label)
+
+        layout.addLayout(info_layout)
+        layout.addStretch()
 
         self._icon = icon
-        self._color = color
+        self._color = bg_color
 
     def set_value(self, value: str):
         """Atualiza o valor do card."""
-        self.value_label.setText(f"{self._icon} {value}")
+        self.value_label.setText(value)
 
 
 class MiniTaskRow(QFrame):
-    """Versão compacta do TaskRow para o Dashboard (suporta simples e múltiplas opções)."""
+    """Versão compacta do TaskRow para o Dashboard - Design flat e colorido."""
 
     def __init__(self, task, is_running: bool, on_play, on_stop, parent=None):
         super().__init__(parent)
@@ -54,92 +77,118 @@ class MiniTaskRow(QFrame):
         self.on_play = on_play
         self.on_stop = on_stop
 
-        self.setProperty("class", "task-row")
-        self.setFixedHeight(60)  # Aumentado de 50 para 60 (mais espaçamento vertical)
+        self.setFixedHeight(70)  # Maior para mais visibilidade
+
+        # Style flat com cor baseada no status
+        status_color = Theme.SUCCESS if is_running else Theme.GLASS_BORDER
+        self.setStyleSheet(f"""
+            MiniTaskRow {{
+                background-color: {Theme.BG_GLASS};
+                border: 2px solid {status_color};
+                border-radius: 10px;
+                border-left: 5px solid {status_color};
+            }}
+        """)
 
         main_layout = QHBoxLayout(self)
-        main_layout.setContentsMargins(12, 8, 12, 8)  # Mais padding interno (era 10, 6, 10, 6)
-        main_layout.setSpacing(12)  # Mais espaço entre elementos (era 10)
+        main_layout.setContentsMargins(12, 10, 16, 10)
+        main_layout.setSpacing(14)
 
-        # Play/Stop button
+        # Play/Stop button - MAIOR
         play_text = f"{Icons.STOP}" if is_running else f"{Icons.PLAY}"
         self.play_btn = QPushButton(play_text)
-        self.play_btn.setFixedSize(40, 40)  # Aumentado de 36x36 para 40x40
-        self.play_btn.setProperty("variant", "danger" if is_running else "success")
+        self.play_btn.setFixedSize(44, 44)
+        self.play_btn.setStyleSheet(f"""
+            QPushButton {{
+                font-size: 18px;
+                border-radius: 22px;
+                background-color: {Theme.DANGER if is_running else Theme.SUCCESS};
+                border: none;
+            }}
+            QPushButton:hover {{
+                background-color: {Theme.DANGER_LIGHT if is_running else Theme.SUCCESS_LIGHT};
+            }}
+        """)
         self.play_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.play_btn.clicked.connect(self._toggle)
         main_layout.addWidget(self.play_btn)
 
-        # ID + Status
-        id_frame = QFrame()
-        id_frame.setFixedWidth(35)
-        id_layout = QVBoxLayout(id_frame)
-        id_layout.setContentsMargins(0, 0, 0, 0)
-        id_layout.setSpacing(0)
-
-        id_label = QLabel(f"#{task.id}")
-        id_label.setStyleSheet("font-weight: bold;")  # Removido font-size hardcoded
-        id_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        id_layout.addWidget(id_label)
-
-        self.status_dot = QLabel(Icons.RUNNING if is_running else Icons.STOPPED)
+        # Status indicator - GRANDE e colorido
+        self.status_dot = QLabel("●" if is_running else "○")
+        color = Theme.SUCCESS if is_running else Theme.TEXT_MUTED
+        self.status_dot.setStyleSheet(f"color: {color}; font-size: 24px;")
+        self.status_dot.setFixedWidth(30)
         self.status_dot.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        color = Theme.STATUS_RUNNING if is_running else Theme.STATUS_STOPPED
-        self.status_dot.setStyleSheet(f"color: {color}; font-size: 14px;")  # Aumentado para 14px
-        id_layout.addWidget(self.status_dot)
-
-        main_layout.addWidget(id_frame)
+        main_layout.addWidget(self.status_dot)
 
         # Info
         info_layout = QVBoxLayout()
         info_layout.setContentsMargins(0, 0, 0, 0)
-        info_layout.setSpacing(2)
+        info_layout.setSpacing(4)
 
+        # ID + Nome do processo
         window_name = task.process_name or task.window_title
-        window_display = window_name[:20] + "..." if len(window_name) > 20 else window_name
-        window_lbl = QLabel(f"<b>{window_display}</b>")
+        window_display = window_name[:25] + "..." if len(window_name) > 25 else window_name
+        header_text = f"<span style='color:{Theme.TEXT_MUTED}'>#{task.id}</span>  <b style='font-size:15px'>{window_display}</b>"
+        window_lbl = QLabel(header_text)
         window_lbl.setToolTip(window_name)
         info_layout.addWidget(window_lbl)
 
         threshold_pct = int(getattr(task, 'threshold', 0.85) * 100)
 
-        # Mostra info diferente para tasks simples vs múltiplas opções
+        # Info da task com cores vibrantes
         if task.task_type == "prompt_handler" and task.options:
-            # Lista todos os nomes das opções
             opt_names = [o["name"] for o in task.options]
-            # Destaca a opção selecionada
             selected_name = opt_names[task.selected_option] if task.selected_option < len(opt_names) else "?"
-            # Mostra: "opção1, opção2 → selecionada"
             all_opts = ", ".join(opt_names)
-            if len(all_opts) > 35:
-                all_opts = all_opts[:32] + "..."
-            info_text = f"<span style='color:{Theme.TEXT_SECONDARY}'>{all_opts}</span> → <span style='color:{Theme.ACCENT_PRIMARY}'>{selected_name}</span> · <span style='color:{Theme.TEXT_MUTED}'>{task.interval}s · {threshold_pct}%</span>"
+            if len(all_opts) > 30:
+                all_opts = all_opts[:27] + "..."
+            info_text = f"<span style='color:{Theme.TEXT_SECONDARY}'>{all_opts}</span> → <b style='color:{Theme.ACCENT_PRIMARY}'>{selected_name}</b> · <span style='color:{Theme.WARNING}'>{task.interval}s</span> · <span style='color:{Theme.ACCENT_SECONDARY}'>{threshold_pct}%</span>"
         else:
-            info_text = f"<span style='color:{Theme.ACCENT_SECONDARY}'>{task.image_name}</span> · <span style='color:{Theme.TEXT_MUTED}'>{task.interval}s · {threshold_pct}%</span>"
+            info_text = f"<b style='color:{Theme.ACCENT_PRIMARY}'>{task.image_name}</b> · <span style='color:{Theme.WARNING}'>{task.interval}s</span> · <span style='color:{Theme.ACCENT_SECONDARY}'>{threshold_pct}%</span>"
 
         template_lbl = QLabel(info_text)
-        # Removido font-size hardcoded - usa tamanho global do tema
         template_lbl.setToolTip(self._build_task_tooltip(task))
         info_layout.addWidget(template_lbl)
 
         main_layout.addLayout(info_layout, 1)
 
-        # Click counter
+        # Click counter - GRANDE e destacado
         self._click_count = 0
+        click_frame = QFrame()
+        click_frame.setFixedWidth(50)
+        click_frame.setStyleSheet(f"""
+            QFrame {{
+                background-color: {Theme.BG_GLASS_LIGHT};
+                border-radius: 8px;
+                padding: 4px;
+            }}
+        """)
+        click_layout = QVBoxLayout(click_frame)
+        click_layout.setContentsMargins(4, 4, 4, 4)
+        click_layout.setSpacing(0)
+
         self.click_label = QLabel("0")
-        self.click_label.setStyleSheet(f"color: {Theme.TEXT_MUTED}; font-weight: bold; font-size: 14px;")  # Aumentado para 14px
+        self.click_label.setStyleSheet(f"color: {Theme.TEXT_PRIMARY}; font-weight: bold; font-size: 20px;")
+        self.click_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.click_label.setToolTip("Cliques realizados")
-        main_layout.addWidget(self.click_label)
+        click_layout.addWidget(self.click_label)
+
+        click_hint = QLabel("clicks")
+        click_hint.setStyleSheet(f"color: {Theme.TEXT_MUTED}; font-size: 9px;")
+        click_hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        click_layout.addWidget(click_hint)
+
+        main_layout.addWidget(click_frame)
 
     def increment_click_count(self):
-        """Incrementa contador de cliques."""
+        """Incrementa contador de cliques com animação."""
         self._click_count += 1
         self.click_label.setText(str(self._click_count))
-        self.click_label.setStyleSheet(f"color: {Theme.SUCCESS}; font-weight: bold; font-size: 14px;")  # Aumentado para 14px
-        # Volta para cor normal após 500ms
+        self.click_label.setStyleSheet(f"color: {Theme.SUCCESS}; font-weight: bold; font-size: 22px;")
         from PyQt6.QtCore import QTimer
-        QTimer.singleShot(500, lambda: self.click_label.setStyleSheet(
-            f"color: {Theme.TEXT_MUTED}; font-weight: bold; font-size: 14px;"  # Aumentado para 14px
+        QTimer.singleShot(400, lambda: self.click_label.setStyleSheet(
+            f"color: {Theme.TEXT_PRIMARY}; font-weight: bold; font-size: 20px;"
         ))
 
     def _toggle(self):
@@ -147,19 +196,48 @@ class MiniTaskRow(QFrame):
             self.on_stop(self.task.id)
             self.is_running = False
             self.play_btn.setText(Icons.PLAY)
-            self.play_btn.setProperty("variant", "success")
+            self.play_btn.setStyleSheet(f"""
+                QPushButton {{
+                    font-size: 18px;
+                    border-radius: 22px;
+                    background-color: {Theme.SUCCESS};
+                    border: none;
+                }}
+                QPushButton:hover {{
+                    background-color: {Theme.SUCCESS_LIGHT};
+                }}
+            """)
         else:
             self.on_play(self.task.id)
             self.is_running = True
             self.play_btn.setText(Icons.STOP)
-            self.play_btn.setProperty("variant", "danger")
+            self.play_btn.setStyleSheet(f"""
+                QPushButton {{
+                    font-size: 18px;
+                    border-radius: 22px;
+                    background-color: {Theme.DANGER};
+                    border: none;
+                }}
+                QPushButton:hover {{
+                    background-color: {Theme.DANGER_LIGHT};
+                }}
+            """)
 
-        self.play_btn.style().unpolish(self.play_btn)
-        self.play_btn.style().polish(self.play_btn)
+        # Atualiza status dot e borda
+        self.status_dot.setText("●" if self.is_running else "○")
+        color = Theme.SUCCESS if self.is_running else Theme.TEXT_MUTED
+        self.status_dot.setStyleSheet(f"color: {color}; font-size: 24px;")
 
-        self.status_dot.setText(Icons.RUNNING if self.is_running else Icons.STOPPED)
-        color = Theme.STATUS_RUNNING if self.is_running else Theme.STATUS_STOPPED
-        self.status_dot.setStyleSheet(f"color: {color}; font-size: 14px;")  # Aumentado de 12px
+        # Atualiza borda da row
+        status_color = Theme.SUCCESS if self.is_running else Theme.GLASS_BORDER
+        self.setStyleSheet(f"""
+            MiniTaskRow {{
+                background-color: {Theme.BG_GLASS};
+                border: 2px solid {status_color};
+                border-radius: 10px;
+                border-left: 5px solid {status_color};
+            }}
+        """)
 
     def _build_task_tooltip(self, task) -> str:
         """Constrói tooltip detalhado para a task."""
