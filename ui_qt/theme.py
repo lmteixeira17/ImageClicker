@@ -7,17 +7,17 @@ Define cores e stylesheet QSS.
 class Theme:
     """Constantes de tema."""
 
-    # Cores base - VERSAO ALTA VISIBILIDADE
-    BG_DARK = "#121218"  # Levemente mais claro (era #0a0a0f)
-    BG_DARKER = "#0a0a10"  # Levemente mais claro (era #050508)
-    BG_PRIMARY = "#121218"  # Alias para BG_DARK
-    BG_GLASS = "#1e1e30"  # Mais claro para paineis (era #1a1a2e)
-    BG_GLASS_LIGHT = "#2a2a48"  # Mais claro para hover (era #252542)
-    BG_GLASS_LIGHTER = "#363660"  # Mais claro para botoes (era #2d2d4a)
+    # Cores base - TESTE EXTREMO (temporario)
+    BG_DARK = "#1a1a24"  # MUITO mais claro para teste
+    BG_DARKER = "#141420"  # Mais claro
+    BG_PRIMARY = "#1a1a24"  # Alias
+    BG_GLASS = "#282840"  # BEM mais claro - deve ser muito visivel
+    BG_GLASS_LIGHT = "#363658"  # Bem mais claro
+    BG_GLASS_LIGHTER = "#444470"  # Bem mais claro
 
-    # Bordas - ALTA VISIBILIDADE
-    GLASS_BORDER = "#6666a0"  # Ainda mais visivel (era #5a5a8c)
-    GLASS_BORDER_LIGHT = "#8080b8"  # Ainda mais claro (era #7070a8)
+    # Bordas - TESTE EXTREMO
+    GLASS_BORDER = "#7777bb"  # MUITO mais visivel - quase azul
+    GLASS_BORDER_LIGHT = "#9999dd"  # Bem claro
 
     # Accent
     ACCENT_PRIMARY = "#6366f1"
