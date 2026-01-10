@@ -55,16 +55,16 @@ class MiniTaskRow(QFrame):
         self.on_stop = on_stop
 
         self.setProperty("class", "task-row")
-        self.setFixedHeight(50)
+        self.setFixedHeight(60)  # Aumentado de 50 para 60 (mais espaçamento vertical)
 
         main_layout = QHBoxLayout(self)
-        main_layout.setContentsMargins(10, 6, 10, 6)
-        main_layout.setSpacing(10)
+        main_layout.setContentsMargins(12, 8, 12, 8)  # Mais padding interno (era 10, 6, 10, 6)
+        main_layout.setSpacing(12)  # Mais espaço entre elementos (era 10)
 
         # Play/Stop button
         play_text = f"{Icons.STOP}" if is_running else f"{Icons.PLAY}"
         self.play_btn = QPushButton(play_text)
-        self.play_btn.setFixedSize(36, 36)
+        self.play_btn.setFixedSize(40, 40)  # Aumentado de 36x36 para 40x40
         self.play_btn.setProperty("variant", "danger" if is_running else "success")
         self.play_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.play_btn.clicked.connect(self._toggle)
@@ -78,14 +78,14 @@ class MiniTaskRow(QFrame):
         id_layout.setSpacing(0)
 
         id_label = QLabel(f"#{task.id}")
-        id_label.setStyleSheet("font-weight: bold; font-size: 11px;")
+        id_label.setStyleSheet("font-weight: bold;")  # Removido font-size hardcoded
         id_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         id_layout.addWidget(id_label)
 
         self.status_dot = QLabel(Icons.RUNNING if is_running else Icons.STOPPED)
         self.status_dot.setAlignment(Qt.AlignmentFlag.AlignCenter)
         color = Theme.STATUS_RUNNING if is_running else Theme.STATUS_STOPPED
-        self.status_dot.setStyleSheet(f"color: {color}; font-size: 12px;")
+        self.status_dot.setStyleSheet(f"color: {color}; font-size: 14px;")  # Aumentado para 14px
         id_layout.addWidget(self.status_dot)
 
         main_layout.addWidget(id_frame)
@@ -118,7 +118,7 @@ class MiniTaskRow(QFrame):
             info_text = f"<span style='color:{Theme.ACCENT_SECONDARY}'>{task.image_name}</span> · <span style='color:{Theme.TEXT_MUTED}'>{task.interval}s · {threshold_pct}%</span>"
 
         template_lbl = QLabel(info_text)
-        template_lbl.setStyleSheet("font-size: 11px;")
+        # Removido font-size hardcoded - usa tamanho global do tema
         template_lbl.setToolTip(self._build_task_tooltip(task))
         info_layout.addWidget(template_lbl)
 
@@ -127,7 +127,7 @@ class MiniTaskRow(QFrame):
         # Click counter
         self._click_count = 0
         self.click_label = QLabel("0")
-        self.click_label.setStyleSheet(f"color: {Theme.TEXT_MUTED}; font-weight: bold; font-size: 12px;")
+        self.click_label.setStyleSheet(f"color: {Theme.TEXT_MUTED}; font-weight: bold; font-size: 14px;")  # Aumentado para 14px
         self.click_label.setToolTip("Cliques realizados")
         main_layout.addWidget(self.click_label)
 
@@ -135,11 +135,11 @@ class MiniTaskRow(QFrame):
         """Incrementa contador de cliques."""
         self._click_count += 1
         self.click_label.setText(str(self._click_count))
-        self.click_label.setStyleSheet(f"color: {Theme.SUCCESS}; font-weight: bold; font-size: 12px;")
+        self.click_label.setStyleSheet(f"color: {Theme.SUCCESS}; font-weight: bold; font-size: 14px;")  # Aumentado para 14px
         # Volta para cor normal após 500ms
         from PyQt6.QtCore import QTimer
         QTimer.singleShot(500, lambda: self.click_label.setStyleSheet(
-            f"color: {Theme.TEXT_MUTED}; font-weight: bold; font-size: 12px;"
+            f"color: {Theme.TEXT_MUTED}; font-weight: bold; font-size: 14px;"  # Aumentado para 14px
         ))
 
     def _toggle(self):
@@ -233,7 +233,7 @@ class DashboardPage(BasePage):
         qa_layout.setSpacing(8)
 
         qa_label = QLabel("Ações Rápidas")
-        qa_label.setStyleSheet(f"color: {Theme.TEXT_MUTED}; font-size: 12px;")
+        qa_label.setStyleSheet(f"color: {Theme.TEXT_MUTED};")  # Removido font-size hardcoded
         qa_layout.addWidget(qa_label)
 
         qa_layout.addSpacing(12)
@@ -257,7 +257,7 @@ class DashboardPage(BasePage):
 
         # Atalhos dica
         shortcuts_hint = QLabel("F1 ou Ctrl+H para ver atalhos")
-        shortcuts_hint.setStyleSheet(f"color: {Theme.TEXT_MUTED}; font-size: 11px;")
+        shortcuts_hint.setStyleSheet(f"color: {Theme.TEXT_MUTED};")  # Removido font-size hardcoded
         qa_layout.addWidget(shortcuts_hint)
 
         layout.addWidget(quick_actions)
@@ -274,7 +274,7 @@ class DashboardPage(BasePage):
         self.tasks_container = QWidget()
         self.tasks_layout = QVBoxLayout(self.tasks_container)
         self.tasks_layout.setContentsMargins(0, 0, 0, 0)
-        self.tasks_layout.setSpacing(4)
+        self.tasks_layout.setSpacing(8)  # Aumentado de 4 para 8 (mais espaço entre tasks)
         self.tasks_layout.addStretch()
 
         tasks_scroll.setWidget(self.tasks_container)
