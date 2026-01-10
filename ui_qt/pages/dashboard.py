@@ -159,7 +159,7 @@ class MiniTaskRow(QFrame):
 
         self.status_dot.setText(Icons.RUNNING if self.is_running else Icons.STOPPED)
         color = Theme.STATUS_RUNNING if self.is_running else Theme.STATUS_STOPPED
-        self.status_dot.setStyleSheet(f"color: {color}; font-size: 12px;")
+        self.status_dot.setStyleSheet(f"color: {color}; font-size: 14px;")  # Aumentado de 12px
 
     def _build_task_tooltip(self, task) -> str:
         """Constrói tooltip detalhado para a task."""

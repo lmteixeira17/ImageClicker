@@ -7,17 +7,17 @@ Define cores e stylesheet QSS.
 class Theme:
     """Constantes de tema."""
 
-    # Cores base
-    BG_DARK = "#0a0a0f"
-    BG_DARKER = "#050508"
-    BG_PRIMARY = "#0a0a0f"  # Alias para BG_DARK
-    BG_GLASS = "#1a1a2e"
-    BG_GLASS_LIGHT = "#252542"
-    BG_GLASS_LIGHTER = "#2d2d4a"
+    # Cores base - VERSAO ALTA VISIBILIDADE
+    BG_DARK = "#121218"  # Levemente mais claro (era #0a0a0f)
+    BG_DARKER = "#0a0a10"  # Levemente mais claro (era #050508)
+    BG_PRIMARY = "#121218"  # Alias para BG_DARK
+    BG_GLASS = "#1e1e30"  # Mais claro para paineis (era #1a1a2e)
+    BG_GLASS_LIGHT = "#2a2a48"  # Mais claro para hover (era #252542)
+    BG_GLASS_LIGHTER = "#363660"  # Mais claro para botoes (era #2d2d4a)
 
-    # Bordas
-    GLASS_BORDER = "#5a5a8c"  # Muito mais visível (era #4a4a6c)
-    GLASS_BORDER_LIGHT = "#7070a8"  # Mais claro para hover (era #5a5a8c)
+    # Bordas - ALTA VISIBILIDADE
+    GLASS_BORDER = "#6666a0"  # Ainda mais visivel (era #5a5a8c)
+    GLASS_BORDER_LIGHT = "#8080b8"  # Ainda mais claro (era #7070a8)
 
     # Accent
     ACCENT_PRIMARY = "#6366f1"
@@ -31,10 +31,10 @@ class Theme:
     DANGER = "#ef4444"
     DANGER_LIGHT = "#f87171"
 
-    # Texto
-    TEXT_PRIMARY = "#ffffff"  # Branco puro para máximo contraste
-    TEXT_SECONDARY = "#c5d4e8"  # Muito mais claro (era #a8b8d1)
-    TEXT_MUTED = "#a8b8d1"  # Bem mais claro (era #8b9bb8)
+    # Texto - ALTA VISIBILIDADE
+    TEXT_PRIMARY = "#ffffff"  # Branco puro
+    TEXT_SECONDARY = "#d0e0f0"  # Ainda mais claro (era #c5d4e8)
+    TEXT_MUTED = "#b8c8e0"  # Ainda mais claro (era #a8b8d1)
 
     # Status
     STATUS_RUNNING = "#10b981"
@@ -53,7 +53,7 @@ def get_stylesheet() -> str:
         background-color: {Theme.BG_DARK};
         color: {Theme.TEXT_PRIMARY};
         font-family: "Segoe UI", sans-serif;
-        font-size: 13px;  /* Aumentado de 12px para 13px */
+        font-size: 14px;  /* ALTA VISIBILIDADE: aumentado para 14px */
     }}
 
     QMainWindow {{
@@ -139,9 +139,9 @@ def get_stylesheet() -> str:
         background-color: {Theme.BG_GLASS_LIGHT};
         border: 1px solid {Theme.GLASS_BORDER};
         border-radius: 4px;
-        padding: 7px 14px;  /* Mais espaçamento (era 6px 12px) */
+        padding: 8px 16px;  /* ALTA VISIBILIDADE: mais padding */
         color: {Theme.TEXT_PRIMARY};
-        font-size: 13px;
+        font-size: 14px;
     }}
     QPushButton:hover {{
         background-color: {Theme.BG_GLASS_LIGHTER};
