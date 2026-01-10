@@ -16,8 +16,8 @@ class Theme:
     BG_GLASS_LIGHTER = "#2d2d4a"
 
     # Bordas
-    GLASS_BORDER = "#4a4a6c"
-    GLASS_BORDER_LIGHT = "#5a5a8c"
+    GLASS_BORDER = "#5a5a8c"  # Muito mais visível (era #4a4a6c)
+    GLASS_BORDER_LIGHT = "#7070a8"  # Mais claro para hover (era #5a5a8c)
 
     # Accent
     ACCENT_PRIMARY = "#6366f1"
@@ -32,17 +32,17 @@ class Theme:
     DANGER_LIGHT = "#f87171"
 
     # Texto
-    TEXT_PRIMARY = "#f8fafc"
-    TEXT_SECONDARY = "#a8b8d1"
-    TEXT_MUTED = "#8b9bb8"
+    TEXT_PRIMARY = "#ffffff"  # Branco puro para máximo contraste
+    TEXT_SECONDARY = "#c5d4e8"  # Muito mais claro (era #a8b8d1)
+    TEXT_MUTED = "#a8b8d1"  # Bem mais claro (era #8b9bb8)
 
     # Status
     STATUS_RUNNING = "#10b981"
-    STATUS_STOPPED = "#94a3b8"
+    STATUS_STOPPED = "#b0c4de"  # Mais claro e visível (era #94a3b8)
 
     # Dimensões
     SIDEBAR_WIDTH = 200
-    ROW_HEIGHT = 28
+    ROW_HEIGHT = 32  # Aumentado de 28 para 32 (mais espaçamento)
 
 
 def get_stylesheet() -> str:
@@ -53,7 +53,7 @@ def get_stylesheet() -> str:
         background-color: {Theme.BG_DARK};
         color: {Theme.TEXT_PRIMARY};
         font-family: "Segoe UI", sans-serif;
-        font-size: 12px;
+        font-size: 13px;  /* Aumentado de 12px para 13px */
     }}
 
     QMainWindow {{
@@ -113,10 +113,10 @@ def get_stylesheet() -> str:
     }}
 
     #sidebar_title {{
-        font-size: 16px;
+        font-size: 17px;  /* Aumentado de 16px para 17px */
         font-weight: bold;
         color: {Theme.TEXT_PRIMARY};
-        padding: 16px;
+        padding: 18px;  /* Mais espaçamento (era 16px) */
     }}
 
     /* === PANELS === */
@@ -127,10 +127,10 @@ def get_stylesheet() -> str:
     }}
 
     .panel-title {{
-        font-size: 13px;
+        font-size: 14px;  /* Aumentado de 13px para 14px */
         font-weight: bold;
         color: {Theme.TEXT_PRIMARY};
-        padding: 8px 12px;
+        padding: 10px 14px;  /* Mais espaçamento (era 8px 12px) */
         border-bottom: 1px solid {Theme.GLASS_BORDER};
     }}
 
@@ -139,8 +139,9 @@ def get_stylesheet() -> str:
         background-color: {Theme.BG_GLASS_LIGHT};
         border: 1px solid {Theme.GLASS_BORDER};
         border-radius: 4px;
-        padding: 6px 12px;
+        padding: 7px 14px;  /* Mais espaçamento (era 6px 12px) */
         color: {Theme.TEXT_PRIMARY};
+        font-size: 13px;
     }}
     QPushButton:hover {{
         background-color: {Theme.BG_GLASS_LIGHTER};
