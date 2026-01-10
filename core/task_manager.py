@@ -138,7 +138,8 @@ class TaskManager:
         self.on_log = on_log
         self.on_execution = on_execution
         self._next_id = 1
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()  # RLock para permitir reentrância
+        self._threads_lock = threading.RLock()  # Lock separado para task_threads
         self._last_log_status: Dict[int, str] = {}  # Guarda último status logado por task
 
     def add_task(
@@ -242,8 +243,10 @@ class TaskManager:
 
     def remove_task(self, task_id: int):
         """Remove task."""
-        if task_id in self.task_threads:
-            self.task_threads[task_id].set()  # Sinaliza para parar
+        with self._threads_lock:
+            if task_id in self.task_threads:
+                self.task_threads[task_id].set()  # Sinaliza para parar
+                del self.task_threads[task_id]
         with self._lock:
             if task_id in self.tasks:
                 del self.tasks[task_id]
@@ -277,75 +280,80 @@ class TaskManager:
 
     def start(self):
         """Inicia execução de todas as tasks habilitadas."""
-        if self.running:
-            return
+        with self._threads_lock:
+            if self.running:
+                return
 
-        self.running = True
-        enabled_tasks = [t for t in self.tasks.values() if t.enabled]
+            self.running = True
+            enabled_tasks = [t for t in self.tasks.values() if t.enabled]
 
-        if not enabled_tasks:
-            self._log("Nenhuma task habilitada!")
-            return
+            if not enabled_tasks:
+                self._log("Nenhuma task habilitada!")
+                return
 
-        self.executor = ThreadPoolExecutor(max_workers=len(enabled_tasks) + 1)
+            self.executor = ThreadPoolExecutor(max_workers=len(enabled_tasks) + 1)
 
-        for task in enabled_tasks:
-            stop_event = threading.Event()
-            self.task_threads[task.id] = stop_event
-            self.executor.submit(self._run_task, task, stop_event)
-            self._log(f"Task #{task.id} iniciada")
+            for task in enabled_tasks:
+                stop_event = threading.Event()
+                self.task_threads[task.id] = stop_event
+                self.executor.submit(self._run_task, task, stop_event)
+                self._log(f"Task #{task.id} iniciada")
 
     def start_single(self, task_id: int):
         """Inicia execução de uma única task."""
-        if task_id not in self.tasks:
-            return
+        with self._threads_lock:
+            if task_id not in self.tasks:
+                return
 
-        task = self.tasks[task_id]
+            task = self.tasks[task_id]
 
-        # Se já está rodando, não inicia de novo
-        if task_id in self.task_threads:
-            self._log(f"Task #{task_id} já está rodando")
-            return
+            # Se já está rodando, não inicia de novo
+            if task_id in self.task_threads:
+                self._log(f"Task #{task_id} já está rodando")
+                return
 
-        self.running = True
+            self.running = True
 
-        if not self.executor:
-            self.executor = ThreadPoolExecutor(max_workers=10)
+            if not self.executor:
+                self.executor = ThreadPoolExecutor(max_workers=10)
 
-        stop_event = threading.Event()
-        self.task_threads[task_id] = stop_event
-        self.executor.submit(self._run_task, task, stop_event)
+            stop_event = threading.Event()
+            self.task_threads[task_id] = stop_event
+            self.executor.submit(self._run_task, task, stop_event)
 
     def stop_single(self, task_id: int) -> bool:
         """Para execução de uma única task."""
-        if task_id in self.task_threads:
-            self.task_threads[task_id].set()  # Sinaliza para parar
-            del self.task_threads[task_id]
-            self._last_log_status.pop(task_id, None)  # Limpa histórico de log
-            self._log(f"Task #{task_id} parada")
-            if task_id in self.tasks:
-                self._update_status(self.tasks[task_id], "Parado")
-            return True
-        return False
+        with self._threads_lock:
+            if task_id in self.task_threads:
+                self.task_threads[task_id].set()  # Sinaliza para parar
+                del self.task_threads[task_id]
+                self._last_log_status.pop(task_id, None)  # Limpa histórico de log
+                self._log(f"Task #{task_id} parada")
+                if task_id in self.tasks:
+                    self._update_status(self.tasks[task_id], "Parado")
+                return True
+            return False
 
     def is_task_running(self, task_id: int) -> bool:
         """Verifica se uma task está rodando."""
-        return task_id in self.task_threads
+        with self._threads_lock:
+            return task_id in self.task_threads
 
     def stop(self):
         """Para todas as tasks."""
-        self.running = False
+        with self._threads_lock:
+            self.running = False
 
-        # Sinaliza todas as threads para parar
-        for event in self.task_threads.values():
-            event.set()
+            # Sinaliza todas as threads para parar
+            for event in self.task_threads.values():
+                event.set()
 
-        self.task_threads.clear()
-        self._last_log_status.clear()  # Limpa histórico de log
+            self.task_threads.clear()
+            self._last_log_status.clear()  # Limpa histórico de log
 
-        if self.executor:
-            self.executor.shutdown(wait=False)
-            self.executor = None
+            if self.executor:
+                self.executor.shutdown(wait=False)
+                self.executor = None
 
     def _run_task(self, task: Task, stop_event: threading.Event):
         """Executa uma task individual em loop."""
@@ -572,3 +580,31 @@ class TaskManager:
         with self._lock:
             self.tasks.clear()
             self._next_id = 1
+
+    def update_image_name(self, old_name: str, new_name: str) -> int:
+        """
+        Atualiza referências de imagem em todas as tasks.
+        
+        Args:
+            old_name: Nome antigo do template (sem extensão)
+            new_name: Nome novo do template (sem extensão)
+            
+        Returns:
+            Número de tasks atualizadas
+        """
+        updated_count = 0
+        with self._lock:
+            for task in self.tasks.values():
+                # Atualiza image_name principal (tasks simples)
+                if task.image_name == old_name:
+                    task.image_name = new_name
+                    updated_count += 1
+                
+                # Atualiza options (prompt handlers)
+                if task.options:
+                    for opt in task.options:
+                        if opt.get("image") == old_name:
+                            opt["image"] = new_name
+                            updated_count += 1
+        
+        return updated_count

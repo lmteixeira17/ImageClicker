@@ -302,6 +302,9 @@ class TasksPage(BasePage):
         self.placeholder.setProperty("variant", "muted")
         self.placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
+        # Carrega tasks inicial
+        self._refresh_tasks()
+
     def on_show(self):
         self._refresh_windows()
         self._refresh_templates()

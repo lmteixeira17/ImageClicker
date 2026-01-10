@@ -17,7 +17,7 @@ class LogSignals(QObject):
     log_message = pyqtSignal(str, str)  # message, level
     task_click = pyqtSignal(int)  # task_id - emitido quando uma task faz um clique
 
-from .theme import get_stylesheet
+from .theme import get_stylesheet, Theme
 from .components.sidebar import Sidebar
 from .components.toast_notification import ToastManager
 from .components.help_dialog import HelpDialog
@@ -70,6 +70,9 @@ class MainWindow(QMainWindow):
         icon_path = self.base_dir / "final_icon.ico"
         if icon_path.exists():
             self.setWindowIcon(QIcon(str(icon_path)))
+
+        # Carrega tema salvo
+        self._load_saved_theme()
 
         # Aplica tema
         self.setStyleSheet(get_stylesheet())
@@ -361,6 +364,74 @@ class MainWindow(QMainWindow):
             self.task_manager.stop()
 
         event.accept()
+
+    def _load_saved_theme(self):
+        """Carrega tema salvo do config."""
+        import json
+        config_file = self.base_dir / ".imageclicker_config.json"
+
+        try:
+            if config_file.exists():
+                with open(config_file, "r", encoding="utf-8") as f:
+                    config = json.load(f)
+                    saved_theme = config.get("theme", "dark")
+                    Theme.set_mode(saved_theme)
+        except Exception:
+            pass  # Usa dark mode por padrão
+
+    def _save_theme_preference(self, mode: str):
+        """Salva preferência de tema no config."""
+        import json
+        config_file = self.base_dir / ".imageclicker_config.json"
+
+        try:
+            config = {}
+            if config_file.exists():
+                with open(config_file, "r", encoding="utf-8") as f:
+                    config = json.load(f)
+
+            config["theme"] = mode
+
+            with open(config_file, "w", encoding="utf-8") as f:
+                json.dump(config, f, indent=2)
+        except Exception as e:
+            print(f"Erro ao salvar tema: {e}")
+
+    def set_theme(self, mode: str):
+        """Altera o tema da aplicação."""
+        from PyQt6.QtWidgets import QMessageBox
+
+        # Salva preferência
+        self._save_theme_preference(mode)
+
+        # Pergunta se quer reiniciar
+        theme_name = "escuro" if mode == "dark" else "claro"
+        reply = QMessageBox.question(
+            self,
+            "Reiniciar Aplicação",
+            f"Tema {theme_name} selecionado.\n\nPara aplicar o novo tema, é necessário reiniciar o aplicativo.\n\nDeseja reiniciar agora?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.Yes
+        )
+
+        if reply == QMessageBox.StandardButton.Yes:
+            self._restart_app()
+
+    def _restart_app(self):
+        """Reinicia a aplicação."""
+        import subprocess
+
+        # Para tasks
+        if self.task_manager:
+            self.task_manager.stop()
+
+        # Reinicia
+        python = sys.executable
+        script = str(self.base_dir / "app_qt.py")
+        subprocess.Popen([python, script])
+
+        # Fecha atual
+        QApplication.quit()
 
 
 def run():

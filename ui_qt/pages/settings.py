@@ -4,12 +4,14 @@ Página Settings - Configurações.
 
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QLineEdit, QDoubleSpinBox, QFileDialog
+    QLineEdit, QDoubleSpinBox, QFileDialog, QFrame, QButtonGroup,
+    QRadioButton
 )
 from PyQt6.QtCore import Qt
 
 from .base_page import BasePage
 from ..components.glass_panel import GlassPanel
+from ..theme import Theme
 
 
 class SettingsPage(BasePage):
@@ -19,6 +21,51 @@ class SettingsPage(BasePage):
         self.set_title("Configurações")
 
         layout = self.content_layout()
+
+        # === Aparência ===
+        appearance_panel = GlassPanel("Aparência")
+        layout.addWidget(appearance_panel)
+
+        appearance_layout = appearance_panel.content_layout()
+
+        # Theme selection
+        theme_row = QHBoxLayout()
+        theme_row.setSpacing(12)
+
+        theme_label = QLabel("Tema:")
+        theme_label.setFixedWidth(120)
+        theme_row.addWidget(theme_label)
+
+        self.theme_group = QButtonGroup(self)
+
+        self.rb_dark = QRadioButton("🌙 Escuro")
+        self.rb_dark.setToolTip("Tema escuro (glassmorphism)")
+        self.rb_light = QRadioButton("☀️ Claro")
+        self.rb_light.setToolTip("Tema claro")
+
+        self.theme_group.addButton(self.rb_dark)
+        self.theme_group.addButton(self.rb_light)
+
+        # Marca o atual
+        if Theme.is_dark():
+            self.rb_dark.setChecked(True)
+        else:
+            self.rb_light.setChecked(True)
+
+        self.rb_dark.toggled.connect(self._on_theme_change)
+
+        theme_row.addWidget(self.rb_dark)
+        theme_row.addWidget(self.rb_light)
+
+        theme_row.addSpacing(20)
+
+        theme_hint = QLabel("Requer reiniciar o app")
+        theme_hint.setProperty("variant", "muted")
+        theme_row.addWidget(theme_hint)
+
+        theme_row.addStretch()
+
+        appearance_layout.addLayout(theme_row)
 
         # === Diretórios ===
         dirs_panel = GlassPanel("Diretórios")
@@ -174,3 +221,17 @@ class SettingsPage(BasePage):
             shutil.copy(file, self.app.tasks_file)
             self.task_manager.load_tasks(self.app.tasks_file)
             self.log(f"Tasks importadas de: {file}")
+
+    def _on_theme_change(self, checked: bool):
+        """Callback quando o tema muda."""
+        if not checked:
+            return
+
+        mode = "dark" if self.rb_dark.isChecked() else "light"
+
+        # Só processa se realmente mudou
+        if (mode == "dark" and Theme.is_dark()) or (mode == "light" and not Theme.is_dark()):
+            return
+
+        if hasattr(self.app, 'set_theme'):
+            self.app.set_theme(mode)
