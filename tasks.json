@@ -1,6 +1,99 @@
 [
   {
-    "id": 9,
+    "id": 14,
+    "window_title": "",
+    "image_name": "",
+    "action": "click",
+    "repeat": true,
+    "interval": 5.0,
+    "enabled": true,
+    "task_type": "prompt_handler",
+    "window_method": "process",
+    "threshold": 0.85,
+    "process_name": "Code",
+    "title_filter": "",
+    "window_index": 0,
+    "options": [
+      {
+        "name": "Yes",
+        "image": "Yes_Code"
+      },
+      {
+        "name": "Yes_Always",
+        "image": "Yes_aways_Code_125DPI"
+      }
+    ],
+    "selected_option": 0
+  },
+  {
+    "id": 15,
+    "window_title": "",
+    "image_name": "",
+    "action": "click",
+    "repeat": true,
+    "interval": 3.0,
+    "enabled": true,
+    "task_type": "prompt_handler",
+    "window_method": "process",
+    "threshold": 0.85,
+    "process_name": "Code",
+    "title_filter": "",
+    "window_index": 0,
+    "options": [
+      {
+        "name": "Yes",
+        "image": "Yes_Code"
+      },
+      {
+        "name": "No",
+        "image": "No_Code"
+      }
+    ],
+    "selected_option": 0
+  },
+  {
+    "id": 16,
+    "window_title": "",
+    "image_name": "yes_and_autoaccept_vscode",
+    "action": "click",
+    "repeat": true,
+    "interval": 5.0,
+    "enabled": true,
+    "task_type": "simple",
+    "window_method": "process",
+    "threshold": 0.85,
+    "process_name": "Code",
+    "title_filter": "",
+    "window_index": 0
+  },
+  {
+    "id": 17,
+    "window_title": "",
+    "image_name": "",
+    "action": "click",
+    "repeat": true,
+    "interval": 5.0,
+    "enabled": true,
+    "task_type": "prompt_handler",
+    "window_method": "process",
+    "threshold": 0.85,
+    "process_name": "Code",
+    "title_filter": "",
+    "window_index": 0,
+    "options": [
+      {
+        "name": "1",
+        "image": "Yes_Code"
+      },
+      {
+        "name": "2",
+        "image": "allow_all_edits_Code"
+      }
+    ],
+    "selected_option": 1
+  },
+  {
+    "id": 18,
     "window_title": "",
     "image_name": "",
     "action": "click",
@@ -10,40 +103,25 @@
     "task_type": "prompt_handler",
     "window_method": "process",
     "threshold": 0.85,
-    "process_name": "Code.exe",
+    "process_name": "Code",
     "title_filter": "",
     "window_index": 0,
     "options": [
       {
         "name": "1",
-        "image": "Yes_Claude"
+        "image": "Yes_Code"
       },
       {
         "name": "2",
-        "image": "Yes_Always_Claude"
+        "image": "Yes_allow_Code"
       }
     ],
     "selected_option": 1
   },
   {
-    "id": 10,
+    "id": 20,
     "window_title": "",
-    "image_name": "Accept_all_Antigravity",
-    "action": "click",
-    "repeat": true,
-    "interval": 10.0,
-    "enabled": true,
-    "task_type": "simple",
-    "window_method": "process",
-    "threshold": 0.85,
-    "process_name": "Antigravity.exe",
-    "title_filter": "",
-    "window_index": 0
-  },
-  {
-    "id": 11,
-    "window_title": "",
-    "image_name": "Antigravity_125DPI",
+    "image_name": "Accept_Antigravity",
     "action": "click",
     "repeat": true,
     "interval": 5.0,
@@ -51,22 +129,37 @@
     "task_type": "simple",
     "window_method": "process",
     "threshold": 0.85,
-    "process_name": "Antigravity.exe",
+    "process_name": "Antigravity",
     "title_filter": "",
     "window_index": 0
   },
   {
-    "id": 12,
+    "id": 21,
     "window_title": "",
-    "image_name": "Yes_and_dont_Code_125DPI",
+    "image_name": "Retry2_Antigravity",
     "action": "click",
     "repeat": true,
     "interval": 5.0,
     "enabled": true,
     "task_type": "simple",
     "window_method": "process",
-    "threshold": 0.5,
-    "process_name": "Code.exe",
+    "threshold": 0.7,
+    "process_name": "Antigravity",
+    "title_filter": "",
+    "window_index": 0
+  },
+  {
+    "id": 22,
+    "window_title": "",
+    "image_name": "Try_Again_Code",
+    "action": "click",
+    "repeat": true,
+    "interval": 5.0,
+    "enabled": true,
+    "task_type": "simple",
+    "window_method": "process",
+    "threshold": 0.85,
+    "process_name": "Code",
     "title_filter": "",
     "window_index": 0
   }

@@ -55,7 +55,7 @@ class ImageThumbnail(QFrame):
         name_label.setProperty("variant", "secondary")
         name_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         name_label.setStyleSheet("font-size: 11px;")
-        name_label.setToolTip(f"{name}\nClique para selecionar\nDuplo-clique para abrir no Explorer")
+        name_label.setToolTip(f"{name}\nClique para selecionar\nDuplo-clique para abrir no Finder")
         layout.addWidget(name_label)
 
     def _load_image(self):
@@ -77,7 +77,8 @@ class ImageThumbnail(QFrame):
 
     def mouseDoubleClickEvent(self, event):
         import subprocess
-        subprocess.Popen(f'explorer /select,"{self.image_path}"')
+        # macOS: abre Finder com arquivo selecionado
+        subprocess.run(['open', '-R', str(self.image_path)])
 
     def set_selected(self, selected: bool):
         self._selected = selected
@@ -319,7 +320,7 @@ class TemplatesPage(BasePage):
         open_btn = QPushButton(f"{Icons.FOLDER} Abrir Pasta")
         open_btn.setProperty("variant", "ghost")
         open_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        open_btn.setToolTip("Abrir pasta de templates no Explorer\nPasta: images/")
+        open_btn.setToolTip("Abrir pasta de templates no Finder\nPasta: images/")
         open_btn.clicked.connect(self._open_folder)
         preview_layout.addWidget(open_btn)
 
@@ -423,7 +424,6 @@ class TemplatesPage(BasePage):
         try:
             from core import get_windows
             from core.image_matcher import capture_window, find_template_location, check_template_visible
-            import win32gui
 
             # Obtém todas as janelas visíveis
             all_windows = get_windows()
@@ -441,18 +441,18 @@ class TemplatesPage(BasePage):
             test_threshold = MATCH_THRESHOLD
 
             # Busca em todas as janelas (igual ao app real)
-            for hwnd, title in all_windows:
+            for window_id, title in all_windows:
                 try:
                     # Usa check_template_visible (mesma função do core)
-                    visible, match = check_template_visible(hwnd, self._selected_path, threshold=test_threshold)
+                    visible, match = check_template_visible(window_id, self._selected_path, threshold=test_threshold)
 
                     if match > best_match:
                         best_match = match
-                        best_window = (hwnd, title)
+                        best_window = (window_id, title)
 
                     if visible:
                         # Encontrou! Pega localização exata
-                        found_location = find_template_location(hwnd, self._selected_path)
+                        found_location = find_template_location(window_id, self._selected_path)
                         break
 
                 except Exception:
@@ -489,8 +489,7 @@ class TemplatesPage(BasePage):
                     else:
                         self.app.toast.warning(f"Encontrado com {conf_pct}% (baixa precisão)")
 
-                # Mostra onde encontrou (move cursor brevemente)
-                self._highlight_position(center_x, center_y)
+                # NÃO move cursor - apenas log (Ghost Click não rouba foco)
 
             elif best_match > 0:
                 # Não encontrou mas teve algum match
@@ -515,31 +514,19 @@ class TemplatesPage(BasePage):
             self.test_btn.setEnabled(True)
             self.test_btn.setText(f"{Icons.SUCCESS} Testar")
 
-    def _highlight_position(self, x: int, y: int):
-        """Destaca brevemente a posição encontrada (move cursor)."""
-        try:
-            import pyautogui
-            # Salva posição atual
-            original = pyautogui.position()
-            # Move para posição encontrada
-            pyautogui.moveTo(x, y, duration=0.2)
-            # Volta após 500ms
-            QTimer.singleShot(500, lambda: pyautogui.moveTo(original[0], original[1], duration=0.1))
-        except Exception:
-            pass  # Ignora erros de movimento
-
     def _rename_template(self):
-        """Renomeia template."""
+        """Renomeia template e atualiza tasks que o usam."""
         if not self._selected_path:
             return
 
+        old_name = self._selected_path.stem
         new_name, ok = QInputDialog.getText(
             self, "Renomear Template",
             "Novo nome:",
-            text=self._selected_path.stem
+            text=old_name
         )
 
-        if ok and new_name and new_name != self._selected_path.stem:
+        if ok and new_name and new_name != old_name:
             new_path = self._selected_path.parent / f"{new_name}.png"
 
             if new_path.exists():
@@ -548,8 +535,19 @@ class TemplatesPage(BasePage):
 
             try:
                 self._selected_path.rename(new_path)
-                self.log(f"Renomeado: {self._selected_path.stem} → {new_name}")
+                self.log(f"Renomeado: {old_name} → {new_name}")
                 self._selected_path = new_path
+                
+                # Atualiza tasks que usam este template
+                if hasattr(self.app, 'task_manager') and self.app.task_manager:
+                    updated = self.app.task_manager.update_image_name(old_name, new_name)
+                    if updated > 0:
+                        # Salva tasks atualizadas
+                        self.app.task_manager.save_tasks(self.app.tasks_file)
+                        self.log(f"Atualizado {updated} referência(s) em tasks")
+                        if hasattr(self.app, 'toast'):
+                            self.app.toast.info(f"{updated} task(s) atualizada(s)")
+                
                 self.refresh()
             except Exception as e:
                 self.log(f"Erro ao renomear: {e}", "error")
@@ -635,6 +633,7 @@ class TemplatesPage(BasePage):
         self.delete_btn.setEnabled(False)
 
     def _open_folder(self):
-        """Abre pasta de imagens."""
+        """Abre pasta de imagens no Finder."""
         import subprocess
-        subprocess.Popen(f'explorer "{self.images_dir}"')
+        # macOS: abre Finder na pasta
+        subprocess.run(['open', str(self.images_dir)])

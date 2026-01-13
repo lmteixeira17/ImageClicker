@@ -1,183 +1,61 @@
-# ImageClicker - AI Agent Instructions
+# ImageClicker – AI Agent Instructions (PyQt6)
 
-## Architecture Overview
+Concise guidance for coding agents to be productive in this repo.
 
-**Multi-window automation tool**: CLI ([iclick.py](iclick.py)) and GUI ([gui.py](gui.py)) support parallel task execution across multiple windows using different image recognition engines.
+## Big Picture
+- **Two frontends**: CLI [iclick.py](iclick.py) and PyQt6 GUI [app_qt.py](app_qt.py) + [ui_qt](ui_qt/).
+- **Core services**: Task orchestration in [core/task_manager.py](core/task_manager.py); image matching + “ghost clicks” in [core/image_matcher.py](core/image_matcher.py); window discovery (title/process) in [core/window_utils.py](core/window_utils.py); profiles in [core/profile_manager.py](core/profile_manager.py).
+- **Why this structure**: GUI stays responsive while tasks run in threads; window-specific matching is faster/reliable; CLI keeps legacy full-screen flows and scripting.
 
-### Core Pattern: Task-Based Multi-Window Automation
-1. **Tasks**: Each task binds a window pattern + template image + action type
-2. **Parallel Execution**: Multiple tasks run simultaneously via `ThreadPoolExecutor`
-3. **Window Targeting**: Tasks find windows by title pattern (wildcards supported)
-4. **Persistence**: Tasks saved to `tasks.json` for reuse
+## Recognition Engines
+- **CLI fullscreen**: `pyautogui.locateOnScreen()` with confidence 0.9 for quick, global matches.
+- **Window-specific (GUI/CLI)**: OpenCV `TM_CCOEFF_NORMED` with threshold 0.85; DPI-aware scaling; “ghost click” via `PostMessage` without moving cursor.
+- See `find_and_click()` in [core/image_matcher.py](core/image_matcher.py) and `find_and_click_window()` in [iclick.py](iclick.py).
 
-### Critical Divergence: Two Recognition Engines
+## Tasks: Parallel Execution
+- Dataclass `Task` in [core/task_manager.py](core/task_manager.py) includes: `window_method` (`title`/`process`), `process_name`, `title_filter`, `window_index`, `threshold`, `repeat/interval`, `action`, and `task_type` (`simple` or `prompt_handler` with `options`).
+- Persistence: [tasks.json](tasks.json) stores array of serialized tasks; `TaskManager.save_tasks()/load_tasks()` handle I/O.
+- Concurrency: one thread per enabled task via `ThreadPoolExecutor`; stop via `threading.Event`; callbacks `on_log`/`on_status_update`/`on_execution` marshal updates.
 
-**CLI (pyautogui-based)** - Full screen mode:
-- Uses `pyautogui.locateOnScreen()` with 0.9 confidence
-- Searches entire screen space (slower but simpler)
-- Best for single-window quick clicks
+## Window Targeting
+- Title patterns with wildcards in [core/window_utils.py](core/window_utils.py): `Chrome*`, `*YouTube*`, `*- Notepad`, exact/contains.
+- Process-based selection: pick windows by executable (e.g. `Code.exe`) with optional `title_filter` and `window_index`.
 
-**GUI & CLI Window Mode (OpenCV-based)**:
-- Uses `cv2.matchTemplate()` with TM_CCOEFF_NORMED and 0.85 threshold
-- Targets specific HWND (window handle) - faster and more reliable
-- Converts to grayscale for better performance
-- See `find_and_click_window()` in [iclick.py](iclick.py#L52-L97) and `find_and_click()` in [gui.py](gui.py#L91-L144)
+## GUI Structure (PyQt6)
+- Entry: [app_qt.py](app_qt.py) calls `ui_qt/main_window.run()`.
+- Pages: Dashboard, Tasks, Templates, Prompts, Settings in [ui_qt/pages](ui_qt/pages/); Sidebar and panels in [ui_qt/components](ui_qt/components/).
+- Capture overlay: [ui_qt/components/capture_overlay.py](ui_qt/components/capture_overlay.py) covers all monitors, suggests template names via EasyOCR, saves PNGs to [images/](images/).
+- The GUI wires `TaskManager` and uses signals for thread-safe logs.
 
-## Task System Architecture
+## Developer Workflows
+- CLI examples:
+  - `python iclick.py capture btn_save`
+  - `python iclick.py click btn_save` or `python iclick.py click btn_save --window "Chrome*"`
+  - `python iclick.py run login_sequence`
+  - `python iclick.py tasks` (parallel from tasks.json)
+- GUI entry: `python app_qt.py` (or use `ImageClicker.bat`).
+- Hardcoded paths: only CLI has absolute paths in [iclick.py](iclick.py) (`BASE_DIR`, `IMAGES_DIR`, `SCRIPTS_DIR`, `TASKS_FILE`). Update if moving the project.
 
-### Task Data Structure ([gui.py](gui.py#L24-L52))
-```python
-@dataclass
-class Task:
-    id: int
-    window_title: str      # Pattern like "Chrome*" or "*YouTube*"
-    hwnd: Optional[int]    # Resolved at runtime
-    image_name: str        # Template name (without .png)
-    action: str            # click, double_click, right_click
-    repeat: bool           # Loop continuously
-    interval: float        # Seconds between repeats
-    enabled: bool          # Can be toggled without removing
-```
+## Project Conventions
+- Templates: PNGs in [images/](images/) named by element/process; overlay suggests names including DPI (e.g., `Save_Chrome_125DPI.png`).
+- Thresholds: default 0.85 for OpenCV; configurable per task (`Task.threshold`).
+- Ghost clicks: prefer window messages over cursor moves to avoid focus stealing.
+- Keep tasks small and specific; use scripts for multi-step flows.
 
-### Persistence Format (`tasks.json`)
-```json
-[
-  {
-    "id": 1,
-    "window_title": "Chrome - *",
-    "image_name": "accept_button",
-    "action": "click",
-    "repeat": true,
-    "interval": 5.0,
-    "enabled": true
-  }
-]
-```
+## Integration Points
+- Tasks → Window selection via `find_all_windows_*` → `image_matcher` executes match + click → status/log callbacks update UI.
+- Prompt handlers: detect any option visible, then click `selected_option`.
+- Profiles: [core/profile_manager.py](core/profile_manager.py) saves/loads sets of tasks to [data/profiles](data/profiles/).
 
-### Window Pattern Matching ([gui.py](gui.py#L68-L83))
-- `"Chrome*"` → starts with "Chrome"
-- `"*YouTube*"` → contains "YouTube"
-- `"*- Notepad"` → ends with "- Notepad"
-- `"Exact Title"` → exact match (case-insensitive)
+## Safety & Pitfalls
+- CLI safety: `pyautogui.PAUSE=0.5`, `FAILSAFE=True` (move to top-left to abort).
+- DPI/Theme changes can stale templates; recapture with overlay or lower threshold cautiously.
+- Multi-monitor: overlay and window screenshots consider virtual screen; coordinates can be negative.
+- Thread safety: don’t mutate `TaskManager.tasks` while running; use provided methods.
 
-## TaskManager Class ([gui.py](gui.py#L148-L232))
+## Where To Look
+- Core logic: [core/task_manager.py](core/task_manager.py), [core/image_matcher.py](core/image_matcher.py), [core/window_utils.py](core/window_utils.py).
+- GUI wiring: [ui_qt/main_window.py](ui_qt/main_window.py), [ui_qt/pages/tasks.py](ui_qt/pages/tasks.py).
+- CLI flows: [iclick.py](iclick.py).
 
-Central orchestrator for parallel execution:
-
-```python
-task_manager = TaskManager(on_status_update=callback, on_log=log_callback)
-task_manager.add_task(window_title="App*", image_name="btn", action="click", repeat=True, interval=5)
-task_manager.start()   # Spawns threads for each enabled task
-task_manager.stop()    # Signals all threads to stop
-```
-
-**Threading Model:**
-- Each task runs in its own thread via `ThreadPoolExecutor`
-- `threading.Event` used for graceful shutdown signaling
-- Status updates marshaled to main thread via callbacks
-- Thread-safe task dictionary with `threading.Lock`
-
-## Script System (Legacy Sequential)
-
-JSON scripts in `scripts/` directory for sequential automation:
-
-```json
-{
-  "actions": [
-    {"type": "click", "image": "template_name", "wait": true, "required": true},
-    {"type": "type", "text": "...", "interval": 0.05},
-    {"type": "press", "key": "enter"},
-    {"type": "hotkey", "keys": ["ctrl", "s"]},
-    {"type": "wait", "seconds": 2},
-    {"type": "wait_for", "image": "template_name", "timeout": 30}
-  ]
-}
-```
-
-**Note**: Scripts use pyautogui (full screen). For window-specific automation, use the Task system instead.
-
-## Hardcoded Paths Pattern
-
-**Critical**: Both files use absolute paths that must be updated together:
-- [iclick.py](iclick.py#L36-L40): `BASE_DIR`, `IMAGES_DIR`, `SCRIPTS_DIR`, `TASKS_FILE`
-- [gui.py](gui.py#L18-L20): `BASE_DIR`, `IMAGES_DIR`, `TASKS_FILE`
-
-## GUI Tabs Structure
-
-The GUI uses a `CTkTabview` with two tabs:
-
-### 📋 Tasks Tab
-- Add new tasks (window selection, image template, action type)
-- Task list with enable/disable toggles
-- Start/Stop all tasks buttons
-
-### 🖼️ Images Tab (Gallery Manager)
-Template image management with:
-- **Thumbnail grid**: Visual 3-column grid of all captured templates
-- **Preview panel**: Larger preview of selected image with dimensions
-- **Actions**:
-  - `🔍 Testar na Tela`: Uses pyautogui to locate template on screen (moves mouse to show location)
-  - `✏️ Renomear`: Rename template file
-  - `🗑️ Deletar`: Delete template (no confirmation dialog)
-  - `📂 Abrir Pasta`: Opens images folder in Explorer
-
-**Key methods** ([gui.py](gui.py)):
-- `_build_images_tab()`: Creates gallery UI
-- `_refresh_image_gallery()`: Rebuilds thumbnail grid
-- `_create_thumbnail()`: Creates clickable thumbnail with hover effects
-- `_select_gallery_image()`: Updates preview panel
-
-## Development Commands
-
-```bash
-# CLI - Single operations
-python iclick.py capture button_name              # Capture template
-python iclick.py click button_name                # Click (full screen search)
-python iclick.py click button_name --window "App*" # Click in specific window
-
-# CLI - Multi-window parallel
-python iclick.py tasks                            # Run all tasks from tasks.json
-python iclick.py list                             # Show images, scripts, and tasks
-
-# GUI
-python gui.py                                     # Launch multi-task GUI
-```
-
-## Safety Mechanisms
-
-From [iclick.py](iclick.py#L47-L48):
-```python
-pyautogui.PAUSE = 0.5      # Mandatory 0.5s pause between ALL actions
-pyautogui.FAILSAFE = True  # Move mouse to (0,0) to emergency abort
-```
-
-**Stopping parallel tasks:**
-- GUI: Click "Parar" button
-- CLI: Press `Ctrl+C`
-
-## Key Dependencies
-
-- **pyautogui**: CLI automation engine + keyboard simulation
-- **opencv-python (cv2)**: Window-specific image matching
-- **pywin32 (win32gui/win32api)**: Windows-specific window enumeration and mouse control
-- **customtkinter**: Modern dark-themed GUI framework
-- **Pillow (PIL)**: Image capture and manipulation
-- **concurrent.futures**: ThreadPoolExecutor for parallel tasks
-
-**Windows-only**: `pywin32` makes this Windows-exclusive.
-
-## Common Pitfalls
-
-1. **Templates become stale**: Screen resolution, theme changes, or DPI scaling breaks matches
-2. **Window not found**: Title changed or window closed - tasks will retry automatically if repeat=True
-3. **Multiple matches**: First match is used - make templates more specific
-4. **Thread safety**: Don't modify `task_manager.tasks` dict while tasks are running
-5. **Runaway loops**: Tasks with repeat=True run forever until stopped
-
-## When Adding Features
-
-- **New action types**: Add to `run_script()` and document in scripts
-- **Task properties**: Update `Task` dataclass, `to_dict()`, `from_dict()`, and GUI widgets
-- **New window matching**: Modify `find_window_by_title()` in both files
-- **GUI modifications**: Use `customtkinter` widgets for consistent theming
-- **Thread operations**: Use locks and events for thread safety
+If any section is unclear or missing (e.g., specific page behaviors), tell me what to expand and I’ll refine these instructions.

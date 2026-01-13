@@ -1,6 +1,6 @@
 """
 Ícones padronizados para o app.
-Usando caracteres Unicode que renderizam bem no Windows.
+Usando caracteres Unicode que renderizam bem em todas as plataformas.
 """
 
 

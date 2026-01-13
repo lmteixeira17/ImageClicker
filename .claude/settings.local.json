@@ -24,7 +24,21 @@
       "Bash(wscript:*)",
       "Bash(timeout 10 python:*)",
       "Bash(timeout 60 python:*)",
-      "Bash(timeout 30 python:*)"
+      "Bash(timeout 30 python:*)",
+      "Bash(find:*)",
+      "Bash(python3:*)",
+      "Bash(timeout 15 python:*)",
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nfeat: Multi-GPU fallback for capture overlay\n\n- Add 4-tier capture strategy for multi-monitor support:\n  1. MSS \\(works well with USB dock monitors\\)\n  2. Win32 API BitBlt \\(works with multi-GPU desktops\\)\n  3. Qt multi-screen \\(native Qt fallback\\)\n  4. Qt primary screen \\(last resort\\)\n- Update claude.md with v3.0 architecture documentation\n- Add UX improvements section to documentation\n\n🤖 Generated with [Claude Code]\\(https://claude.com/claude-code\\)\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(git push)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nfix: DPI detection and template matching improvements\n\n- Fix DPI metadata saving using Win32 GetDeviceCaps API\n- Add get_template_dpi\\(\\) to read DPI from PNG metadata\n- Calculate correct scale ratio \\(window_dpi / template_dpi\\)\n- Fix hardcoded 60% threshold in templates.py \\(now uses 85%\\)\n- Add \"Recapture\" button to update templates without breaking tasks\n- Redesign toast notifications with solid backgrounds and better visibility\n  - Each type \\(success/error/warning/info\\) has distinct colors\n  - Added drop shadow and circular icon badge\n  - Improved text contrast and readability\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(git commit:*)",
+      "Bash(timeout /t 3)",
+      "Bash(tasklist:*)",
+      "Bash(powershell \"Get-Process python*, pythonw* -ErrorAction SilentlyContinue | Format-Table Id,ProcessName -AutoSize\")",
+      "Bash(powershell \"Get-Process -Id 62356 | Select-Object Id, ProcessName, Path, StartTime | Format-List\")",
+      "Bash(git checkout:*)",
+      "Bash(start pythonw app_qt.py)"
     ]
   }
 }

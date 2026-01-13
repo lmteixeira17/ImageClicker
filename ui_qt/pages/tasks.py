@@ -66,7 +66,7 @@ class TasksPage(BasePage):
         self.method_group = QButtonGroup(self)
         self.rb_process = QRadioButton("Processo")
         self.rb_process.setChecked(True)
-        self.rb_process.setToolTip("Buscar por nome do processo (ex: Code.exe)\nRecomendado: funciona mesmo se o título da janela mudar")
+        self.rb_process.setToolTip("Buscar por nome do processo (ex: Code, Safari)\nRecomendado: funciona mesmo se o título da janela mudar")
         self.rb_title = QRadioButton("Título")
         self.rb_title.setToolTip("Buscar por título da janela\nÚtil quando múltiplos processos têm o mesmo nome")
         self.method_group.addButton(self.rb_process)
@@ -671,8 +671,7 @@ class TasksPage(BasePage):
 
         try:
             from core.image_matcher import check_template_visible, find_template_location
-            from core.window_utils import find_window_by_process, find_window_by_title, find_all_windows_by_process, find_all_windows_by_title
-            import win32gui
+            from core.window_utils import find_window_by_process, find_window_by_title, find_all_windows_by_process, find_all_windows_by_title, get_window_title
 
             # Encontra janela(s)
             if task.window_method == "process":
@@ -704,7 +703,7 @@ class TasksPage(BasePage):
     def _simulate_single_template(self, task, all_windows):
         """Simula busca de template único."""
         from core.image_matcher import check_template_visible, find_template_location
-        import win32gui
+        from core.window_utils import get_window_title
 
         template_path = self.images_dir / f"{task.image_name}.png"
         if not template_path.exists():
@@ -717,17 +716,17 @@ class TasksPage(BasePage):
         best_window = None
         found_location = None
 
-        for hwnd in all_windows:
+        for window_id in all_windows:
             try:
-                window_title = win32gui.GetWindowText(hwnd)
-                visible, match = check_template_visible(hwnd, template_path, threshold=task.threshold)
+                window_title = get_window_title(window_id)
+                visible, match = check_template_visible(window_id, template_path, threshold=task.threshold)
 
                 if match > best_match:
                     best_match = match
-                    best_window = (hwnd, window_title)
+                    best_window = (window_id, window_title)
 
                 if visible:
-                    found_location = find_template_location(hwnd, template_path)
+                    found_location = find_template_location(window_id, template_path)
                     break
             except Exception:
                 continue
@@ -749,8 +748,7 @@ class TasksPage(BasePage):
             if hasattr(self.app, 'toast'):
                 self.app.toast.success(f"Encontrado! {conf_pct}% em '{window_name}'")
 
-            # Destaca posição
-            self._highlight_position(center_x, center_y)
+            # NÃO move cursor - apenas log (Ghost Click não rouba foco)
         else:
             window_name = best_window[1][:25] if best_window else "?"
             self.log(f"{Icons.WARNING} Task #{task.id}: NÃO ENCONTRADO", "warning")
@@ -762,7 +760,7 @@ class TasksPage(BasePage):
     def _simulate_multi_options(self, task, all_windows):
         """Simula busca de múltiplas opções."""
         from core.image_matcher import check_template_visible, find_template_location
-        import win32gui
+        from core.window_utils import get_window_title
 
         if not task.options:
             return
@@ -770,9 +768,9 @@ class TasksPage(BasePage):
         total_options = len(task.options)
         threshold_pct = int(task.threshold * 100)
 
-        for hwnd in all_windows:
+        for window_id in all_windows:
             try:
-                window_title = win32gui.GetWindowText(hwnd)
+                window_title = get_window_title(window_id)
                 window_name = window_title[:25] + "..." if len(window_title) > 25 else window_title
 
                 visible_count = 0
@@ -784,12 +782,12 @@ class TasksPage(BasePage):
                         results.append((opt['name'], 0, False, "Template não existe"))
                         continue
 
-                    visible, match = check_template_visible(hwnd, template_path, threshold=task.threshold)
+                    visible, match = check_template_visible(window_id, template_path, threshold=task.threshold)
                     conf_pct = int(match * 100)
 
                     if visible:
                         visible_count += 1
-                        location = find_template_location(hwnd, template_path)
+                        location = find_template_location(window_id, template_path)
                         if location:
                             x, y, w, h = location
                             results.append((opt['name'], conf_pct, True, f"({x + w//2}, {y + h//2})"))
@@ -815,12 +813,7 @@ class TasksPage(BasePage):
                     if hasattr(self.app, 'toast'):
                         self.app.toast.success(f"Prompt confirmado! Clicaria em '{selected}'")
 
-                    # Destaca a opção que seria clicada
-                    selected_template = self.images_dir / f"{task.options[task.selected_option]['image']}.png"
-                    location = find_template_location(hwnd, selected_template)
-                    if location:
-                        x, y, w, h = location
-                        self._highlight_position(x + w//2, y + h//2)
+                    # NÃO move cursor - apenas log (Ghost Click não rouba foco)
                     return
 
                 elif visible_count > 0:
@@ -850,17 +843,6 @@ class TasksPage(BasePage):
             return "Aceitável"
         else:
             return "Baixo"
-
-    def _highlight_position(self, x: int, y: int):
-        """Destaca brevemente a posição encontrada."""
-        try:
-            import pyautogui
-            from PyQt6.QtCore import QTimer
-            original = pyautogui.position()
-            pyautogui.moveTo(x, y, duration=0.2)
-            QTimer.singleShot(500, lambda: pyautogui.moveTo(original[0], original[1], duration=0.1))
-        except Exception:
-            pass
 
     def open_new_task_dialog(self):
         """Abre formulário para nova task (chamado por atalho)."""

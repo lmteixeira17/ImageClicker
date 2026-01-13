@@ -13,7 +13,8 @@ from typing import Callable, Dict, List, Optional
 from .image_matcher import find_and_click, check_template_visible
 from .window_utils import (
     find_window_by_title, find_window_by_process,
-    find_all_windows_by_title, find_all_windows_by_process
+    find_all_windows_by_title, find_all_windows_by_process,
+    get_window_title
 )
 
 
@@ -39,7 +40,7 @@ class Task:
 
     # Window selector fields
     window_method: str = "title"  # "title" ou "process"
-    process_name: str = ""  # Nome do processo (ex: "Code.exe")
+    process_name: str = ""  # Nome do processo (ex: "Code", "Safari")
     title_filter: str = ""  # Filtro de título quando usa process
     window_index: int = 0  # Qual janela quando múltiplas (0, 1, 2...)
 
@@ -167,7 +168,7 @@ class TaskManager:
             repeat: Se deve repetir continuamente
             interval: Intervalo entre repetições em segundos
             window_method: "title" ou "process"
-            process_name: Nome do processo (ex: "Code.exe")
+            process_name: Nome do processo (ex: "Code", "Safari")
             title_filter: Filtro adicional de título
             window_index: Índice da janela quando múltiplas
             threshold: Threshold de detecção (0.0 a 1.0)
@@ -364,6 +365,7 @@ class TaskManager:
             start_time = time.time()
 
             # Busca TODAS as janelas que correspondem ao padrão
+            # Por padrão, ignora janelas minimizadas (não podem ser capturadas)
             all_windows = task.find_all_windows()
 
             if not all_windows:
@@ -372,9 +374,9 @@ class TaskManager:
                 status_key = "window_not_found"
                 if self._last_log_status.get(task.id) != status_key:
                     if task.window_method == "process":
-                        self._log(f"Task #{task.id}: Processo '{task.process_name}' não encontrado")
+                        self._log(f"Task #{task.id}: Processo '{task.process_name}' não encontrado (ou janelas minimizadas)")
                     else:
-                        self._log(f"Task #{task.id}: Janela '{task.window_title[:30]}' não encontrada")
+                        self._log(f"Task #{task.id}: Janela '{task.window_title[:30]}' não encontrada (ou minimizada)")
                     self._last_log_status[task.id] = status_key
                 if not task.repeat:
                     break
@@ -385,6 +387,7 @@ class TaskManager:
             success = False
             match = 0.0
             num_windows = len(all_windows)
+            best_window_title = ""
 
             # Reseta status de "janela não encontrada" quando encontrar janelas
             if self._last_log_status.get(task.id) == "window_not_found":
@@ -392,11 +395,12 @@ class TaskManager:
 
             self._update_status(task, f"Buscando ({num_windows})...")
 
-            for hwnd in all_windows:
+            for i, hwnd in enumerate(all_windows):
                 if stop_event.is_set():
                     break
 
                 task.hwnd = hwnd
+                window_title = get_window_title(hwnd)
 
                 # Executa de acordo com o tipo de task
                 if task.task_type == "prompt_handler":
@@ -407,9 +411,11 @@ class TaskManager:
                 if found:
                     success = True
                     match = m
+                    best_window_title = window_title
                     break  # Encontrou em uma janela, para de buscar
                 elif m > match:
                     match = m  # Guarda o melhor match encontrado
+                    best_window_title = window_title
 
             # Calcula tempo de execução
             elapsed_ms = (time.time() - start_time) * 1000
@@ -422,6 +428,14 @@ class TaskManager:
                 self._update_status(task, f"{match:.0%}")
             else:
                 self._update_status(task, f"{match:.0%}")
+                # Log detalhado quando não encontra (apenas se mudou desde o último log)
+                status_key = f"not_found_{match:.2f}_{best_window_title[:20]}"
+                if self._last_log_status.get(task.id) != status_key:
+                    # Trunca título para 30 caracteres
+                    short_title = best_window_title[:30] + "…" if len(best_window_title) > 30 else best_window_title
+                    self._log(f"⚠️ Task #{task.id}: NÃO ENCONTRADO")
+                    self._log(f"Melhor match: {match:.0%} em '{short_title}' (threshold: {task.threshold:.0%})")
+                    self._last_log_status[task.id] = status_key
 
             if not task.repeat:
                 self._log(f"Task #{task.id}: Execução única finalizada")

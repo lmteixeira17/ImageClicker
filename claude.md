@@ -2,10 +2,70 @@
 
 ## Visão Geral
 
-ImageClicker é uma ferramenta de automação de cliques baseada em reconhecimento de imagem para Windows. Suporta execução paralela de múltiplas tasks em diferentes janelas simultaneamente.
+ImageClicker é uma ferramenta de automação de cliques baseada em reconhecimento de imagem para **macOS**. Suporta execução paralela de múltiplas tasks em diferentes janelas simultaneamente.
 
-**Versão**: 3.0 (Professional UX)
-**Última Atualização**: 2026-01-07
+**Versão**: 3.1 (macOS Native)
+**Última Atualização**: 2026-01-13
+**Plataforma**: macOS (Quartz/AppKit/PyObjC)
+
+## Instalação e Execução
+
+### Pré-requisitos
+
+- Python 3.8+ (recomendado: Python 3.11+)
+- macOS 10.15+ (Catalina ou superior)
+- Permissões de **Acessibilidade** (obrigatório para cliques)
+- Permissões de **Gravação de Tela** (obrigatório para captura)
+
+### Instalação Rápida
+
+```bash
+# 1. Navegar para o diretório do projeto
+cd "/Users/luismarceloteixeira/Library/CloudStorage/OneDrive-Personal/LM/Projetos/_ImageClicker_MAC"
+
+# 2. Criar ambiente virtual
+python3 -m venv venv
+
+# 3. Instalar dependências
+source venv/bin/activate
+pip install -r requirements.txt
+```
+
+### Aliases Globais (zsh)
+
+Adicione ao `~/.zshrc`:
+
+```bash
+# ImageClicker
+IMAGECLICKER_DIR="/caminho/para/ImageClicker_MAC"
+alias iclick='"$IMAGECLICKER_DIR/venv/bin/python3" "$IMAGECLICKER_DIR/iclick.py"'
+alias imageclicker='"$IMAGECLICKER_DIR/venv/bin/python3" "$IMAGECLICKER_DIR/app_qt.py"'
+```
+
+Depois: `source ~/.zshrc`
+
+### Execução
+
+```bash
+# GUI
+imageclicker
+
+# CLI
+iclick --help
+iclick tasks
+iclick capture nome_botao
+```
+
+### Permissões macOS (OBRIGATÓRIO)
+
+1. **Ajustes do Sistema** → **Privacidade e Segurança** → **Acessibilidade**
+   - Adicionar **Terminal** (ou app que executa Python)
+   - Se usar VS Code terminal, adicionar **Visual Studio Code**
+
+2. **Ajustes do Sistema** → **Privacidade e Segurança** → **Gravação de Tela**
+   - Adicionar **Terminal** (ou app que executa Python)
+
+> **Importante**: Reinicie o Terminal após conceder permissões.
 
 ## Estrutura do Projeto
 
@@ -13,14 +73,16 @@ ImageClicker é uma ferramenta de automação de cliques baseada em reconhecimen
 ImageClicker/
 ├── app_qt.py              # GUI - Entrada principal PyQt6
 ├── iclick.py              # CLI - Interface de linha de comando
+├── iclick                 # Script shell para CLI (alias)
 ├── images/                # Templates capturados (PNG)
 ├── scripts/               # Scripts de automação sequencial (JSON)
 ├── tasks.json             # Configuração de tasks paralelas
+├── venv/                  # Ambiente virtual Python
 ├── core/                  # Módulo core
 │   ├── __init__.py        # Exports principais
 │   ├── task_manager.py    # Gerenciador de tasks paralelas
-│   ├── image_matcher.py   # Template matching com OpenCV
-│   └── window_utils.py    # Utilitários de janelas Windows
+│   ├── image_matcher.py   # Template matching com OpenCV + Quartz
+│   └── window_utils.py    # Utilitários de janelas macOS (Quartz/AppKit)
 ├── ui_qt/                 # Interface PyQt6
 │   ├── main_window.py     # Janela principal
 │   ├── theme.py           # Tema glassmorphism
@@ -41,6 +103,7 @@ ImageClicker/
 │       ├── help_dialog.py # Dialog de ajuda/atalhos
 │       ├── onboarding.py  # Onboarding para novos usuários
 │       ├── confirm_dialog.py # Dialog de confirmação
+│       ├── capture_overlay.py # Overlay de captura de tela
 │       └── icons.py       # Ícones Unicode
 ├── docs/                  # Documentação estruturada
 │   └── ...                # Guias e referências
@@ -48,8 +111,9 @@ ImageClicker/
 ├── CHANGELOG.md           # Histórico de mudanças
 ├── requirements.txt       # Dependências Python
 ├── .imageclicker_config.json # Config do usuário (auto-gerado)
-├── iclick.bat             # Launcher Windows (CLI)
-├── ImageClicker.bat       # Launcher Windows (GUI)
+├── install.command        # Instalador de dependências (macOS)
+├── ImageClicker.command   # Launcher macOS (GUI)
+├── iclick.command         # Launcher macOS (CLI)
 └── final_icon.ico         # Ícone da aplicação
 ```
 
@@ -63,7 +127,11 @@ ImageClicker/
   - `pillow` - Manipulação de imagens
   - `opencv-python` - Reconhecimento de imagem (template matching)
   - `PyQt6` - Interface gráfica moderna (Glassmorphism)
-  - `pywin32` - Controle de janelas Windows e cliques fantasma
+  - `pyobjc-core` - Bridge Python-Objective-C
+  - `pyobjc-framework-Quartz` - APIs CoreGraphics/Quartz (captura, cliques)
+  - `pyobjc-framework-Cocoa` - APIs AppKit (janelas, processos)
+  - `pyobjc-framework-ApplicationServices` - APIs de acessibilidade
+  - `mss` - Captura de tela cross-platform
   - `numpy` - Operações com arrays
   - `easyocr` - OCR para extração de texto em capturas (opcional)
 
@@ -73,15 +141,52 @@ ImageClicker/
 - **GUI (app_qt.py)**: Interface gráfica PyQt6 com páginas (Dashboard, Tasks, Templates, Settings)
 - **TaskManager**: Gerenciador de execução paralela com ThreadPoolExecutor
 - **Templates**: Imagens PNG para template matching (OpenCV TM_CCOEFF_NORMED)
-- **Ghost Click**: Cliques via PostMessage (não rouba foco)
+- **Ghost Click**: Cliques via CGEvent (CoreGraphics)
 - **Tasks Unificadas**: Uma única entidade Task suporta modo simples e múltiplas opções
+
+### APIs macOS Utilizadas
+
+- **CGWindowListCopyWindowInfo**: Listar janelas visíveis (inclui todos os Spaces)
+- **CGWindowListCreateImage**: Capturar conteúdo de janelas (pixels físicos Retina)
+- **CGEventCreateMouseEvent**: Criar eventos de mouse
+- **CGEventPost**: Enviar eventos de clique (coordenadas em pontos lógicos)
+- **NSScreen**: Informações de monitores e DPI (Retina)
+- **NSWorkspace**: Listar aplicativos em execução
+
+### Conceitos Importantes - macOS Retina
+
+O macOS usa dois sistemas de coordenadas:
+
+| Tipo | Descrição | Uso |
+|------|-----------|-----|
+| **Pontos Lógicos** | Coordenadas independentes de DPI | CGEvent (cliques), kCGWindowBounds |
+| **Pixels Físicos** | Pixels reais da tela (2x em Retina) | CGWindowListCreateImage, template matching |
+
+**Fator de escala Retina**: Em telas Retina, 1 ponto lógico = 2 pixels físicos.
+
+O código faz a conversão automaticamente:
+- **Captura**: Converte pontos lógicos → pixels físicos para recortar corretamente
+- **Clique**: Converte pixels físicos → pontos lógicos para clicar na posição correta
+
+### Suporte a Fullscreen e Spaces
+
+O ImageClicker suporta janelas em **fullscreen** (que ficam em Spaces separados no macOS):
+
+| Cenário | Funciona? |
+|---------|-----------|
+| Janela normal (mesmo Space) | ✅ Sim |
+| Janela fullscreen (Space dedicado, ativo) | ✅ Sim |
+| Janela em outro Space (não visível) | ❌ Não* |
+| Janela minimizada | ❌ Não |
+
+> *Limitação do macOS: não é possível capturar ou clicar em janelas de Spaces não ativos.
 
 ## Funcionalidades Principais
 
 ### 1. Template Matching
 
 - **OpenCV**: Busca em janela específica (threshold configurável por task, default 85%)
-- **Multi-instância**: Busca em TODAS as janelas do mesmo processo (ex: 3 VSCodes)
+- **Multi-instância**: Busca em TODAS as janelas do mesmo processo (ex: 3 janelas do Safari)
 - Suporte multi-monitor via virtual screen
 - Escalonamento automático de DPI
 
@@ -101,19 +206,29 @@ ImageClicker/
 
 ### 3. Clique Fantasma (Ghost Click)
 
-- **Não rouba foco**: Cliques via `PostMessage` direto para a janela alvo
-- **Não move cursor**: Mouse permanece onde está durante automação
+- **Cliques via CGEvent**: Usa CoreGraphics para enviar eventos de mouse
 - Suporta click, double_click, right_click
-- Encontra controle filho automaticamente (botões, inputs, etc.)
+- **Nota**: No macOS, CGEvent move o cursor momentaneamente (diferente do Windows PostMessage)
+- **Conversão Retina**: Coordenadas são convertidas de pixels físicos para pontos lógicos automaticamente
+
+```python
+# Exemplo de conversão (interno)
+scale_x = win_width_points / img_width  # ~0.5 em Retina
+rel_x = int(pixel_x * scale_x)          # Converte para pontos
+```
 
 ### 4. Captura Visual com OCR
 
 - Overlay fullscreen multi-monitor
 - Preview em tempo real com dimensões
+- **Captura via Quartz**: Usa `CGWindowListCreateImage` para compatibilidade com matching
+- **Conversão Retina**: Coordenadas lógicas são convertidas para pixels físicos
 - **OCR automático**: Extrai texto do botão capturado (EasyOCR)
-- **DPI automático**: Detecta escala DPI da janela
+- **DPI automático**: Detecta escala DPI da janela e salva nos metadados PNG
 - Nome sugerido: `{TextoOCR}_{Processo}` (DPI removido do nome)
 - ESC para cancelar, botão direito para reiniciar
+
+> **Nota técnica**: A captura usa o mesmo método que o template matching (`CGWindowListCreateImage`) para garantir consistência nos resultados.
 
 ### 5. Galeria de Templates
 
@@ -121,13 +236,13 @@ ImageClicker/
 - **Hover preview**: Preview ampliado ao passar o mouse
 - Preview ampliável no painel lateral
 - Teste, renomeação e exclusão de templates
-- Integração com Explorer
+- Integração com Finder (duplo clique abre no Finder)
 
 ### 6. Sistema de Atalhos de Teclado
 
-- **Navegação**: Ctrl+1-5 para páginas
-- **Ações**: Ctrl+N (nova task), Ctrl+Shift+C (captura), Ctrl+E/Shift+S (start/stop all)
-- **Ajuda**: F1 ou Ctrl+H (lista de atalhos)
+- **Navegação**: Cmd+1-5 para páginas (Ctrl também funciona)
+- **Ações**: Cmd+N (nova task), Cmd+Shift+C (captura), Cmd+E/Shift+S (start/stop all)
+- **Ajuda**: F1 ou Cmd+H (lista de atalhos)
 - KeyboardManager centralizado em `ui_qt/keyboard_manager.py`
 
 ### 7. Toast Notifications
@@ -155,7 +270,13 @@ ImageClicker/
 ## Comandos CLI Principais
 
 ```bash
-# Captura
+# Usando alias (recomendado)
+iclick capture <nome>
+iclick click <nome>
+iclick tasks
+iclick list
+
+# Ou diretamente
 python iclick.py capture <nome>
 
 # Clique
@@ -168,6 +289,74 @@ python iclick.py run <script>                # Executa script JSON
 python iclick.py tasks                       # Executa tasks.json
 python iclick.py list                        # Lista recursos
 ```
+
+## Troubleshooting macOS
+
+### Clique não funciona
+
+**Sintoma**: Template é encontrado mas o clique não acontece.
+
+**Causa**: Falta permissão de Acessibilidade.
+
+**Solução**:
+1. Ajustes do Sistema → Privacidade e Segurança → Acessibilidade
+2. Adicione o Terminal (ou VS Code)
+3. Reinicie o Terminal
+
+### Captura retorna tela inteira
+
+**Sintoma**: Ao capturar, salva a janela toda em vez da seleção.
+
+**Causa**: Problema na conversão de coordenadas Retina.
+
+**Solução**: Verifique se está usando a versão mais recente do `capture_overlay.py` com suporte a escala Retina.
+
+### Template não encontrado (baixo match)
+
+**Sintoma**: Match sempre abaixo do threshold, mesmo com imagem visível.
+
+**Causas possíveis**:
+1. Template capturado em DPI diferente
+2. Tema claro/escuro diferente
+3. Janela em outro Space (não visível)
+
+**Soluções**:
+1. Recapture o template no mesmo monitor/DPI
+2. Use o mesmo tema (claro/escuro) da captura
+3. Mova a janela para o Space atual ou use fullscreen ativo
+
+### Janela fullscreen não detectada
+
+**Sintoma**: Tasks não encontram janelas em fullscreen.
+
+**Causa**: Janela em Space não ativo.
+
+**Solução**:
+- Mantenha o Space da janela fullscreen ativo
+- Ou use a janela no mesmo Space do ImageClicker
+
+### Erro "externally-managed-environment"
+
+**Sintoma**: Erro ao instalar dependências com pip.
+
+**Causa**: macOS protege o Python do sistema.
+
+**Solução**: Use ambiente virtual:
+```bash
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+```
+
+### Processo com nome diferente do Windows
+
+**Sintoma**: Task configurada com `Code.exe` não encontra janelas.
+
+**Causa**: Nomes de processo são diferentes no macOS.
+
+**Solução**: Use nomes sem `.exe`:
+- Windows: `Code.exe` → macOS: `Code`
+- Windows: `chrome.exe` → macOS: `Google Chrome`
 
 ## Padrões de Código
 
@@ -863,4 +1052,29 @@ wc -l docs/*.md
 - Regras de documentação forem modificadas
 - Workflow de desenvolvimento mudar
 
-**Última Revisão Completa**: 2026-01-07
+**Última Revisão Completa**: 2026-01-13
+
+---
+
+## Histórico de Correções macOS (v3.1)
+
+### Correções Retina/DPI
+
+1. **Captura de região** (`capture_overlay.py`):
+   - Corrigido cálculo de escala para telas Retina
+   - Coordenadas lógicas são convertidas para pixels físicos antes do recorte
+
+2. **Clique em posição correta** (`image_matcher.py`):
+   - Coordenadas do template matching (pixels físicos) são convertidas para pontos lógicos
+   - CGEvent recebe coordenadas em pontos lógicos corretamente
+
+3. **Suporte a fullscreen** (`window_utils.py`):
+   - `_get_all_windows_info` agora inclui janelas de todos os Spaces
+   - `get_windows_by_process` busca em todos os Spaces
+   - `is_window_visible` considera janelas fullscreen
+
+### Arquivos Modificados
+
+- `core/image_matcher.py` - Conversão pixels→pontos para cliques
+- `core/window_utils.py` - Suporte a fullscreen/Spaces
+- `ui_qt/components/capture_overlay.py` - Captura Retina correta

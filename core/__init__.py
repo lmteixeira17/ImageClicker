@@ -10,6 +10,7 @@ from .window_utils import (
     find_window_by_process,
     get_windows_by_process,
     get_available_processes,
+    is_window_minimized,
 )
 
 from .image_matcher import (
@@ -32,6 +33,7 @@ __all__ = [
     'find_window_by_process',
     'get_windows_by_process',
     'get_available_processes',
+    'is_window_minimized',
     # Image matcher
     'find_and_click',
     'check_template_visible',

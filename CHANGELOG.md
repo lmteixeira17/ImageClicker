@@ -5,13 +5,35 @@ Todas as mudanças notáveis neste projeto serão documentadas neste arquivo.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/),
 e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
-## [Unreleased]
+## [3.1.0] - 2026-01-13
+
+### Added
+
+- Suporte completo a telas Retina (conversão automática pontos ↔ pixels)
+- Suporte a janelas em fullscreen (Spaces separados)
+- Aliases globais para CLI (`iclick`) e GUI (`imageclicker`)
+- Ambiente virtual (`venv/`) para isolamento de dependências
+- Documentação de troubleshooting específica para macOS
+
+### Changed
+
+- Captura de região agora usa `CGWindowListCreateImage` para compatibilidade com matching
+- `_get_all_windows_info` inclui janelas de todos os Spaces por padrão
+- `get_windows_by_process` busca em todos os Spaces
+- Nomes de processo sem `.exe` (ex: `Code` em vez de `Code.exe`)
 
 ### Fixed
 
-- Captura de janelas agora usa PrintWindow API em vez de ImageGrab
-- Cliques funcionam mesmo quando janela está atrás de outras janelas
-- Não é mais necessário ter a janela em foco para template matching
+- Captura de região Retina agora recorta corretamente (escala pontos → pixels)
+- Cliques agora funcionam na posição correta em telas Retina (escala pixels → pontos)
+- Janelas fullscreen são detectadas corretamente
+- `is_window_visible` considera janelas em outros Spaces ativos
+
+## [Unreleased]
+
+### Notes
+
+- Versão anterior tinha correções específicas para Windows que não se aplicam ao macOS
 
 ## [3.0.0] - 2026-01-07
 

@@ -1,4 +1,4 @@
-# ImageClicker Dependencies
+# ImageClicker Dependencies (macOS)
 # Python 3.8+
 
 # Core automation
@@ -10,7 +10,16 @@ opencv-python>=4.5.0
 numpy>=1.21.0
 
 # GUI
-customtkinter>=5.0.0
+PyQt6>=6.4.0
 
-# Windows API
-pywin32>=300
+# macOS APIs
+pyobjc-core>=9.0
+pyobjc-framework-Quartz>=9.0
+pyobjc-framework-Cocoa>=9.0
+pyobjc-framework-ApplicationServices>=9.0
+
+# Screen capture (cross-platform)
+mss>=9.0.0
+
+# Build (opcional - apenas para gerar executavel)
+# pyinstaller>=6.0.0

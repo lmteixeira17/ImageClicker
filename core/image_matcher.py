@@ -1,35 +1,53 @@
 """
-Funções para template matching e clique em imagens.
-Usa OpenCV para detecção e pywin32 para cliques "fantasma" (sem roubar foco).
-Suporta captura de janelas em background usando PrintWindow API.
+Funcoes para template matching e clique em imagens.
+Usa OpenCV para deteccao e Quartz/CGEvent para cliques no macOS.
+Suporta captura de janelas em background usando CGWindowListCreateImage.
 """
 
-import ctypes
 import time
 from pathlib import Path
 from typing import Callable, Optional, Tuple
 
 import cv2
 import numpy as np
-import win32api
-import win32con
-import win32gui
-import win32ui
 
-from .window_utils import get_window_dpi_scale
+from Quartz import (
+    CGWindowListCreateImage,
+    CGRectNull,
+    kCGWindowListOptionIncludingWindow,
+    kCGWindowImageBoundsIgnoreFraming,
+    kCGWindowImageDefault,
+    CGImageGetWidth,
+    CGImageGetHeight,
+    CGImageGetBytesPerRow,
+    CGImageGetDataProvider,
+    CGDataProviderCopyData,
+    CGEventCreateMouseEvent,
+    CGEventPost,
+    kCGEventLeftMouseDown,
+    kCGEventLeftMouseUp,
+    kCGEventRightMouseDown,
+    kCGEventRightMouseUp,
+    kCGHIDEventTap,
+    kCGMouseButtonLeft,
+    kCGMouseButtonRight,
+    CGEventSetIntegerValueField,
+    kCGMouseEventClickState,
+    CGEventGetLocation,
+    CGWarpMouseCursorPosition,
+)
+from Quartz.CoreGraphics import CGPointMake
 
-# Threshold mínimo para considerar um match válido (85%)
+from .window_utils import get_window_dpi_scale, get_window_rect, is_window_visible
+
+# Threshold minimo para considerar um match valido (85%)
 MATCH_THRESHOLD = 0.85
-
-# PrintWindow flags
-PW_CLIENTONLY = 1
-PW_RENDERFULLCONTENT = 2  # Windows 8.1+, captura conteúdo mesmo em background
 
 
 def get_template_dpi(template_path: Path) -> float:
-    """Lê o DPI de captura dos metadados do template PNG.
+    """Le o DPI de captura dos metadados do template PNG.
 
-    O DPI é salvo durante a captura para permitir escalonamento
+    O DPI e salvo durante a captura para permitir escalonamento
     correto quando a janela alvo tem DPI diferente.
 
     Args:
@@ -37,7 +55,7 @@ def get_template_dpi(template_path: Path) -> float:
 
     Returns:
         Escala DPI (1.0 = 96 DPI/100%, 1.25 = 120 DPI/125%, etc.)
-        Retorna 1.0 se não encontrar metadados (assume 100%)
+        Retorna 1.0 se nao encontrar metadados (assume 100%)
     """
     try:
         from PIL import Image
@@ -57,81 +75,204 @@ def get_template_dpi(template_path: Path) -> float:
     except Exception:
         pass
 
-    # Assume 100% DPI se não conseguir ler (templates antigos)
+    # Assume 100% DPI se nao conseguir ler (templates antigos)
     return 1.0
 
 
-def capture_window(hwnd: int) -> Optional[np.ndarray]:
+def _is_window_valid_for_capture(window_id: int) -> bool:
     """
-    Captura o conteúdo de uma janela usando PrintWindow API.
-    Funciona mesmo quando a janela está atrás de outras ou parcialmente coberta.
+    Verifica se a janela esta em um estado valido para captura.
 
     Args:
-        hwnd: Handle da janela
+        window_id: ID da janela
 
     Returns:
-        numpy array BGR da imagem ou None se falhar
+        True se a janela pode ser capturada
     """
     try:
-        # Obtém dimensões da janela
-        left, top, right, bottom = win32gui.GetWindowRect(hwnd)
-        width = right - left
-        height = bottom - top
+        # Verifica se esta visivel
+        if not is_window_visible(window_id):
+            return False
 
-        if width <= 0 or height <= 0:
-            return None
+        # Verifica dimensoes validas
+        rect = get_window_rect(window_id)
+        if not rect:
+            return False
 
-        # Cria DC e bitmap compatíveis
-        hwnd_dc = win32gui.GetWindowDC(hwnd)
-        mfc_dc = win32ui.CreateDCFromHandle(hwnd_dc)
-        save_dc = mfc_dc.CreateCompatibleDC()
+        left, top, right, bottom = rect
+        if right <= left or bottom <= top:
+            return False
 
-        bitmap = win32ui.CreateBitmap()
-        bitmap.CreateCompatibleBitmap(mfc_dc, width, height)
-        save_dc.SelectObject(bitmap)
+        return True
+    except Exception:
+        return False
 
-        # PrintWindow com flag para capturar conteúdo em background
-        # Flag 2 (PW_RENDERFULLCONTENT) funciona melhor para janelas modernas
-        result = ctypes.windll.user32.PrintWindow(hwnd, save_dc.GetSafeHdc(), PW_RENDERFULLCONTENT)
 
-        if result == 0:
-            # Fallback: tenta sem flag (para janelas mais antigas)
-            result = ctypes.windll.user32.PrintWindow(hwnd, save_dc.GetSafeHdc(), 0)
+def _cgimage_to_numpy(cg_image) -> Optional[np.ndarray]:
+    """
+    Converte CGImage para numpy array (BGR).
 
-        # Converte bitmap para numpy array
-        bmp_info = bitmap.GetInfo()
-        bmp_bits = bitmap.GetBitmapBits(True)
+    Args:
+        cg_image: CGImage do Quartz
 
-        img = np.frombuffer(bmp_bits, dtype=np.uint8)
-        img = img.reshape((bmp_info['bmHeight'], bmp_info['bmWidth'], 4))
+    Returns:
+        numpy array BGR ou None se falhar
+    """
+    if cg_image is None:
+        return None
 
-        # Limpa recursos
-        win32gui.DeleteObject(bitmap.GetHandle())
-        save_dc.DeleteDC()
-        mfc_dc.DeleteDC()
-        win32gui.ReleaseDC(hwnd, hwnd_dc)
+    try:
+        width = CGImageGetWidth(cg_image)
+        height = CGImageGetHeight(cg_image)
+        bytes_per_row = CGImageGetBytesPerRow(cg_image)
 
-        # Converte BGRA para BGR (remove canal alpha)
-        img_bgr = img[:, :, :3]
+        # Obtem dados do provider
+        data_provider = CGImageGetDataProvider(cg_image)
+        data = CGDataProviderCopyData(data_provider)
+
+        # Converte para numpy
+        img = np.frombuffer(data, dtype=np.uint8)
+
+        # CGImage retorna RGBA ou BGRA dependendo da fonte
+        # bytes_per_row pode incluir padding
+        if bytes_per_row == width * 4:
+            img = img.reshape((height, width, 4))
+        else:
+            # Com padding, precisamos processar linha por linha
+            img_reshaped = np.zeros((height, width, 4), dtype=np.uint8)
+            for row in range(height):
+                start = row * bytes_per_row
+                end = start + width * 4
+                img_reshaped[row] = np.frombuffer(data[start:end], dtype=np.uint8).reshape((width, 4))
+            img = img_reshaped
+
+        # Converte RGBA para BGR (OpenCV format)
+        # macOS CGImage usa BGRA por padrao
+        img_bgr = cv2.cvtColor(img, cv2.COLOR_BGRA2BGR)
 
         return img_bgr
 
     except Exception as e:
+        print(f"Erro ao converter CGImage: {e}")
         return None
 
 
-# Constantes para mensagens de mouse
-WM_LBUTTONDOWN = 0x0201
-WM_LBUTTONUP = 0x0202
-WM_LBUTTONDBLCLK = 0x0203
-WM_RBUTTONDOWN = 0x0204
-WM_RBUTTONUP = 0x0205
-MK_LBUTTON = 0x0001
-MK_RBUTTON = 0x0002
+def capture_window(window_id: int, restore_if_minimized: bool = False) -> Optional[np.ndarray]:
+    """
+    Captura o conteudo de uma janela usando CGWindowListCreateImage.
+    Funciona mesmo quando a janela esta atras de outras ou parcialmente coberta.
+
+    IMPORTANTE: Janelas minimizadas sao ignoradas silenciosamente (retorna None).
+
+    Args:
+        window_id: ID da janela (kCGWindowNumber)
+        restore_if_minimized: IGNORADO - mantido para compatibilidade de API
+
+    Returns:
+        numpy array BGR da imagem ou None se janela minimizada/invalida
+    """
+    try:
+        # Verifica se a janela esta em estado valido para captura
+        if not _is_window_valid_for_capture(window_id):
+            return None
+
+        # Captura a janela usando CGWindowListCreateImage
+        # CGRectNull captura a janela inteira
+        # kCGWindowListOptionIncludingWindow inclui apenas a janela especificada
+        # kCGWindowImageBoundsIgnoreFraming ignora sombras e decoracoes
+        cg_image = CGWindowListCreateImage(
+            CGRectNull,
+            kCGWindowListOptionIncludingWindow,
+            window_id,
+            kCGWindowImageBoundsIgnoreFraming | kCGWindowImageDefault
+        )
+
+        if cg_image is None:
+            return None
+
+        # Converte para numpy BGR
+        return _cgimage_to_numpy(cg_image)
+
+    except Exception as e:
+        print(f"Erro ao capturar janela: {e}")
+        return None
+
+
+def _perform_ghost_click(window_id: int, x: int, y: int, action: str):
+    """
+    Executa clique via CGEvent.
+
+    No macOS, CGEvent move o cursor. Para minimizar o impacto:
+    1. Salva posicao atual do cursor
+    2. Move para posicao alvo
+    3. Executa clique
+    4. Restaura posicao do cursor
+
+    Args:
+        window_id: ID da janela alvo
+        x: Coordenada X relativa a janela
+        y: Coordenada Y relativa a janela
+        action: "click", "double_click" ou "right_click"
+    """
+    try:
+        # Obtem coordenadas absolutas da janela
+        rect = get_window_rect(window_id)
+        if not rect:
+            return
+
+        # Converte coordenadas relativas para absolutas
+        abs_x = rect[0] + x
+        abs_y = rect[1] + y
+
+        # Salva posicao atual do cursor
+        # (infelizmente CGEvent sempre move o cursor)
+        # Comentado por enquanto - pode causar efeitos indesejados
+        # original_pos = CGEventGetLocation(CGEventCreate(None))
+
+        point = CGPointMake(float(abs_x), float(abs_y))
+
+        if action == "double_click":
+            # Primeiro clique
+            down1 = CGEventCreateMouseEvent(None, kCGEventLeftMouseDown, point, kCGMouseButtonLeft)
+            up1 = CGEventCreateMouseEvent(None, kCGEventLeftMouseUp, point, kCGMouseButtonLeft)
+            CGEventPost(kCGHIDEventTap, down1)
+            time.sleep(0.01)
+            CGEventPost(kCGHIDEventTap, up1)
+
+            time.sleep(0.05)
+
+            # Segundo clique (com click state = 2 para double click)
+            down2 = CGEventCreateMouseEvent(None, kCGEventLeftMouseDown, point, kCGMouseButtonLeft)
+            up2 = CGEventCreateMouseEvent(None, kCGEventLeftMouseUp, point, kCGMouseButtonLeft)
+            CGEventSetIntegerValueField(down2, kCGMouseEventClickState, 2)
+            CGEventSetIntegerValueField(up2, kCGMouseEventClickState, 2)
+            CGEventPost(kCGHIDEventTap, down2)
+            time.sleep(0.01)
+            CGEventPost(kCGHIDEventTap, up2)
+
+        elif action == "right_click":
+            down = CGEventCreateMouseEvent(None, kCGEventRightMouseDown, point, kCGMouseButtonRight)
+            up = CGEventCreateMouseEvent(None, kCGEventRightMouseUp, point, kCGMouseButtonRight)
+            CGEventPost(kCGHIDEventTap, down)
+            time.sleep(0.01)
+            CGEventPost(kCGHIDEventTap, up)
+
+        else:  # click
+            down = CGEventCreateMouseEvent(None, kCGEventLeftMouseDown, point, kCGMouseButtonLeft)
+            up = CGEventCreateMouseEvent(None, kCGEventLeftMouseUp, point, kCGMouseButtonLeft)
+            CGEventPost(kCGHIDEventTap, down)
+            time.sleep(0.01)
+            CGEventPost(kCGHIDEventTap, up)
+
+        # Pequeno delay apos o clique
+        time.sleep(0.05)
+
+    except Exception as e:
+        print(f"Erro ao executar clique: {e}")
 
 
 def find_and_click(
-    hwnd: int,
+    window_id: int,
     template_path: Path,
     action: str = "click",
     debug_callback: Optional[Callable[[str], None]] = None,
@@ -141,11 +282,11 @@ def find_and_click(
     Encontra template na janela e executa clique.
 
     Args:
-        hwnd: Handle da janela alvo
+        window_id: ID da janela alvo
         template_path: Caminho para o arquivo de imagem do template
         action: Tipo de clique - "click", "double_click", "right_click"
-        debug_callback: Função opcional para debug logging
-        threshold: Threshold de detecção (0.0 a 1.0). Se None, usa MATCH_THRESHOLD
+        debug_callback: Funcao opcional para debug logging
+        threshold: Threshold de deteccao (0.0 a 1.0). Se None, usa MATCH_THRESHOLD
 
     Returns:
         Tupla (sucesso, mensagem, percentual_match)
@@ -155,12 +296,14 @@ def find_and_click(
             debug_callback(msg)
 
     try:
-        # Obtém coordenadas da janela
-        rect = win32gui.GetWindowRect(hwnd)
+        # Obtem coordenadas da janela
+        rect = get_window_rect(window_id)
+        if not rect:
+            return False, 'Janela nao encontrada', 0.0
         debug(f"  Window rect: {rect}")
 
-        # Captura janela usando PrintWindow (funciona em background)
-        screenshot_bgr = capture_window(hwnd)
+        # Captura janela usando CGWindowListCreateImage
+        screenshot_bgr = capture_window(window_id)
 
         if screenshot_bgr is None:
             return False, 'Falha ao capturar janela', 0.0
@@ -171,20 +314,16 @@ def find_and_click(
         # Carrega template
         template = cv2.imread(str(template_path), cv2.IMREAD_GRAYSCALE)
         if template is None:
-            return False, 'Template não encontrado', 0.0
+            return False, 'Template nao encontrado', 0.0
         debug(f"  Template shape original: {template.shape}, path: {template_path.name}")
 
-        # Calcula escala necessária baseado no DPI do template vs DPI da janela
-        # template_dpi: DPI em que o template foi capturado
-        # window_dpi: DPI atual da janela alvo
-        # Se template foi capturado em 125% e janela está em 100%, precisa reduzir
-        # Se template foi capturado em 100% e janela está em 125%, precisa aumentar
+        # Calcula escala necessaria baseado no DPI do template vs DPI da janela
         template_dpi = get_template_dpi(template_path)
-        window_dpi = get_window_dpi_scale(hwnd)
+        window_dpi = get_window_dpi_scale(window_id)
         dpi_scale = window_dpi / template_dpi  # Escala relativa
         debug(f"  Template DPI: {template_dpi:.2f} ({int(template_dpi * 100)}%), Window DPI: {window_dpi:.2f} ({int(window_dpi * 100)}%), Scale: {dpi_scale:.2f}")
 
-        if abs(dpi_scale - 1.0) > 0.05:  # Diferença significativa (>5%)
+        if abs(dpi_scale - 1.0) > 0.05:  # Diferenca significativa (>5%)
             original_h, original_w = template.shape
             new_w = int(original_w * dpi_scale)
             new_h = int(original_h * dpi_scale)
@@ -204,108 +343,60 @@ def find_and_click(
 
         if max_val >= match_threshold:
             h, w = template.shape
-            # Coordenadas relativas à janela (para clique fantasma)
-            rel_x = max_loc[0] + w // 2
-            rel_y = max_loc[1] + h // 2
+            # Coordenadas em pixels fisicos (da imagem capturada)
+            pixel_x = max_loc[0] + w // 2
+            pixel_y = max_loc[1] + h // 2
 
-            # Clique fantasma - envia mensagem direto para a janela sem mover mouse
-            _perform_ghost_click(hwnd, rel_x, rel_y, action)
+            # Converte para pontos logicos (CGEvent espera pontos, nao pixels)
+            # A imagem capturada esta em pixels fisicos (Retina = 2x)
+            # As coordenadas da janela (kCGWindowBounds) estao em pontos logicos
+            window_rect = get_window_rect(window_id)
+            if window_rect:
+                win_width_points = window_rect[2] - window_rect[0]
+                win_height_points = window_rect[3] - window_rect[1]
+                img_height, img_width = screenshot_gray.shape
+
+                # Fator de escala: pixels fisicos -> pontos logicos
+                scale_x = win_width_points / img_width if img_width > 0 else 1.0
+                scale_y = win_height_points / img_height if img_height > 0 else 1.0
+
+                rel_x = int(pixel_x * scale_x)
+                rel_y = int(pixel_y * scale_y)
+                debug(f"  Click: pixel({pixel_x}, {pixel_y}) -> points({rel_x}, {rel_y}), scale=({scale_x:.2f}, {scale_y:.2f})")
+            else:
+                rel_x = pixel_x
+                rel_y = pixel_y
+
+            # Executa clique
+            _perform_ghost_click(window_id, rel_x, rel_y, action)
 
             return True, f'{action} OK', max_val
 
-        return False, 'Não encontrado', max_val
+        return False, 'Nao encontrado', max_val
 
     except Exception as e:
         return False, str(e), 0.0
 
 
-def _make_lparam(x: int, y: int) -> int:
-    """Cria lParam para mensagens de mouse (coordenadas empacotadas)."""
-    return (y << 16) | (x & 0xFFFF)
-
-
-def _get_child_at_point(hwnd: int, x: int, y: int) -> tuple[int, int, int]:
-    """
-    Encontra o controle filho na posição especificada.
-
-    Args:
-        hwnd: Handle da janela pai
-        x: Coordenada X relativa à janela pai
-        y: Coordenada Y relativa à janela pai
-
-    Returns:
-        Tupla (child_hwnd, child_x, child_y) onde child_x/y são coordenadas relativas ao filho
-    """
-    # Converte para coordenadas de tela
-    rect = win32gui.GetWindowRect(hwnd)
-    screen_x = rect[0] + x
-    screen_y = rect[1] + y
-
-    # Encontra a janela/controle mais profundo naquele ponto
-    child = win32gui.WindowFromPoint((screen_x, screen_y))
-
-    if child and child != hwnd:
-        # Converte coordenadas para serem relativas ao filho
-        child_rect = win32gui.GetWindowRect(child)
-        child_x = screen_x - child_rect[0]
-        child_y = screen_y - child_rect[1]
-        return child, child_x, child_y
-
-    # Se não encontrou filho, usa a janela principal
-    return hwnd, x, y
-
-
-def _perform_ghost_click(hwnd: int, x: int, y: int, action: str):
-    """
-    Executa clique "fantasma" - envia mensagem direto para a janela sem mover mouse.
-    Não rouba foco nem altera a posição do cursor.
-
-    Args:
-        hwnd: Handle da janela alvo
-        x: Coordenada X relativa à janela
-        y: Coordenada Y relativa à janela
-        action: "click", "double_click" ou "right_click"
-    """
-    # Envia direto para a janela principal para evitar roubo de foco
-    # Não usamos _get_child_at_point pois WindowFromPoint pode ativar janelas
-    lparam = _make_lparam(x, y)
-
-    if action == "double_click":
-        # Double click usa mensagem específica WM_LBUTTONDBLCLK
-        win32gui.PostMessage(hwnd, WM_LBUTTONDOWN, MK_LBUTTON, lparam)
-        win32gui.PostMessage(hwnd, WM_LBUTTONUP, 0, lparam)
-        time.sleep(0.01)
-        win32gui.PostMessage(hwnd, WM_LBUTTONDBLCLK, MK_LBUTTON, lparam)
-        win32gui.PostMessage(hwnd, WM_LBUTTONUP, 0, lparam)
-    elif action == "right_click":
-        win32gui.PostMessage(hwnd, WM_RBUTTONDOWN, MK_RBUTTON, lparam)
-        time.sleep(0.01)
-        win32gui.PostMessage(hwnd, WM_RBUTTONUP, 0, lparam)
-    else:  # click
-        win32gui.PostMessage(hwnd, WM_LBUTTONDOWN, MK_LBUTTON, lparam)
-        time.sleep(0.01)
-        win32gui.PostMessage(hwnd, WM_LBUTTONUP, 0, lparam)
-
-
 def check_template_visible(
-    hwnd: int,
+    window_id: int,
     template_path: Path,
     threshold: Optional[float] = None
 ) -> Tuple[bool, float]:
     """
-    Verifica se um template está visível na janela SEM clicar.
+    Verifica se um template esta visivel na janela SEM clicar.
 
     Args:
-        hwnd: Handle da janela alvo
+        window_id: ID da janela alvo
         template_path: Caminho para o arquivo de imagem do template
-        threshold: Threshold de detecção (0.0 a 1.0). Se None, usa MATCH_THRESHOLD
+        threshold: Threshold de deteccao (0.0 a 1.0). Se None, usa MATCH_THRESHOLD
 
     Returns:
-        Tupla (visível, percentual_match)
+        Tupla (visivel, percentual_match)
     """
     try:
-        # Captura janela usando PrintWindow (funciona em background)
-        screenshot_bgr = capture_window(hwnd)
+        # Captura janela
+        screenshot_bgr = capture_window(window_id)
         if screenshot_bgr is None:
             return False, 0.0
 
@@ -317,7 +408,7 @@ def check_template_visible(
 
         # Calcula escala baseado no DPI do template vs DPI da janela
         template_dpi = get_template_dpi(template_path)
-        window_dpi = get_window_dpi_scale(hwnd)
+        window_dpi = get_window_dpi_scale(window_id)
         dpi_scale = window_dpi / template_dpi
 
         if abs(dpi_scale - 1.0) > 0.05:
@@ -341,22 +432,26 @@ def check_template_visible(
 
 
 def find_template_location(
-    hwnd: int,
+    window_id: int,
     template_path: Path
 ) -> Optional[Tuple[int, int, int, int]]:
     """
-    Encontra a localização do template na janela.
+    Encontra a localizacao do template na janela.
 
     Args:
-        hwnd: Handle da janela alvo
+        window_id: ID da janela alvo
         template_path: Caminho para o arquivo de imagem do template
 
     Returns:
-        Tupla (x, y, width, height) da posição do template ou None se não encontrado
+        Tupla (x, y, width, height) da posicao do template ou None se nao encontrado
+        Coordenadas sao absolutas (screen coordinates)
     """
     try:
-        rect = win32gui.GetWindowRect(hwnd)
-        screenshot_bgr = capture_window(hwnd)
+        rect = get_window_rect(window_id)
+        if not rect:
+            return None
+
+        screenshot_bgr = capture_window(window_id)
         if screenshot_bgr is None:
             return None
         screenshot_gray = cv2.cvtColor(screenshot_bgr, cv2.COLOR_BGR2GRAY)
@@ -367,7 +462,7 @@ def find_template_location(
 
         # Calcula escala baseado no DPI do template vs DPI da janela
         template_dpi = get_template_dpi(template_path)
-        window_dpi = get_window_dpi_scale(hwnd)
+        window_dpi = get_window_dpi_scale(window_id)
         dpi_scale = window_dpi / template_dpi
 
         if abs(dpi_scale - 1.0) > 0.05:

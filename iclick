@@ -1,0 +1,11 @@
+#!/bin/bash
+# ImageClicker CLI - Equivalente ao iclick.bat do Windows
+# Uso: ./iclick [comando] [argumentos]
+# Exemplos:
+#   ./iclick capture botao
+#   ./iclick click botao
+#   ./iclick tasks
+#   ./iclick list
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+python3 "$SCRIPT_DIR/iclick.py" "$@"

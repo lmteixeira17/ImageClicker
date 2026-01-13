@@ -1,0 +1,11 @@
+{
+  "welcome_shown": true,
+  "tour_completed": false,
+  "checklist": {
+    "capture_template": false,
+    "create_task": false,
+    "run_automation": false,
+    "explore_settings": false
+  },
+  "theme": "dark"
+}
