@@ -7,6 +7,7 @@ ImageClicker é uma ferramenta de automação de cliques baseada em reconhecimen
 **Versão**: 3.1 (macOS Native)
 **Última Atualização**: 2026-01-13
 **Plataforma**: macOS (Quartz/AppKit/PyObjC)
+**Repositório**: https://github.com/lmteixeira17/ImageClicker
 
 ## Instalação e Execução
 
@@ -18,6 +19,23 @@ ImageClicker é uma ferramenta de automação de cliques baseada em reconhecimen
 - Permissões de **Gravação de Tela** (obrigatório para captura)
 
 ### Instalação Rápida
+
+```bash
+# 1. Clonar o repositório
+git clone https://github.com/lmteixeira17/ImageClicker.git
+cd ImageClicker
+
+# 2. Criar ambiente virtual (OBRIGATÓRIO no macOS moderno)
+python3 -m venv venv
+
+# 3. Ativar ambiente virtual
+source venv/bin/activate
+
+# 4. Instalar dependências
+pip install -r requirements.txt
+```
+
+### Instalação Local (sem clone)
 
 ```bash
 # 1. Navegar para o diretório do projeto
@@ -37,7 +55,7 @@ Adicione ao `~/.zshrc`:
 
 ```bash
 # ImageClicker
-IMAGECLICKER_DIR="/caminho/para/ImageClicker_MAC"
+IMAGECLICKER_DIR="/caminho/para/ImageClicker"
 alias iclick='"$IMAGECLICKER_DIR/venv/bin/python3" "$IMAGECLICKER_DIR/iclick.py"'
 alias imageclicker='"$IMAGECLICKER_DIR/venv/bin/python3" "$IMAGECLICKER_DIR/app_qt.py"'
 ```
@@ -47,14 +65,30 @@ Depois: `source ~/.zshrc`
 ### Execução
 
 ```bash
-# GUI
+# GUI (interface gráfica)
 imageclicker
+# ou
+./ImageClicker.command
 
-# CLI
+# CLI (linha de comando)
 iclick --help
 iclick tasks
 iclick capture nome_botao
+# ou
+./iclick.command tasks
 ```
+
+### Scripts de Execução macOS
+
+O projeto inclui scripts `.command` para execução fácil:
+
+| Script | Descrição |
+|--------|-----------|
+| `ImageClicker.command` | Abre a GUI (duplo clique no Finder) |
+| `iclick.command` | Abre CLI interativo |
+| `install.command` | Instala dependências automaticamente |
+
+Para usar: duplo clique no Finder ou `chmod +x *.command` e execute.
 
 ### Permissões macOS (OBRIGATÓRIO)
 
@@ -74,6 +108,9 @@ ImageClicker/
 ├── app_qt.py              # GUI - Entrada principal PyQt6
 ├── iclick.py              # CLI - Interface de linha de comando
 ├── iclick                 # Script shell para CLI (alias)
+├── iclick.command         # Launcher macOS (CLI)
+├── ImageClicker.command   # Launcher macOS (GUI)
+├── install.command        # Instalador de dependências (macOS)
 ├── images/                # Templates capturados (PNG)
 ├── scripts/               # Scripts de automação sequencial (JSON)
 ├── tasks.json             # Configuração de tasks paralelas
@@ -85,7 +122,7 @@ ImageClicker/
 │   └── window_utils.py    # Utilitários de janelas macOS (Quartz/AppKit)
 ├── ui_qt/                 # Interface PyQt6
 │   ├── main_window.py     # Janela principal
-│   ├── theme.py           # Tema glassmorphism
+│   ├── theme.py           # Tema glassmorphism (dark/light)
 │   ├── keyboard_manager.py # Atalhos de teclado globais
 │   ├── pages/             # Páginas da aplicação
 │   │   ├── base_page.py   # Classe base para páginas
@@ -103,7 +140,7 @@ ImageClicker/
 │       ├── help_dialog.py # Dialog de ajuda/atalhos
 │       ├── onboarding.py  # Onboarding para novos usuários
 │       ├── confirm_dialog.py # Dialog de confirmação
-│       ├── capture_overlay.py # Overlay de captura de tela
+│       ├── capture_overlay.py # Overlay de captura de tela (Retina-aware)
 │       └── icons.py       # Ícones Unicode
 ├── docs/                  # Documentação estruturada
 │   └── ...                # Guias e referências
@@ -111,9 +148,6 @@ ImageClicker/
 ├── CHANGELOG.md           # Histórico de mudanças
 ├── requirements.txt       # Dependências Python
 ├── .imageclicker_config.json # Config do usuário (auto-gerado)
-├── install.command        # Instalador de dependências (macOS)
-├── ImageClicker.command   # Launcher macOS (GUI)
-├── iclick.command         # Launcher macOS (CLI)
 └── final_icon.ico         # Ícone da aplicação
 ```
 
@@ -146,12 +180,14 @@ ImageClicker/
 
 ### APIs macOS Utilizadas
 
-- **CGWindowListCopyWindowInfo**: Listar janelas visíveis (inclui todos os Spaces)
-- **CGWindowListCreateImage**: Capturar conteúdo de janelas (pixels físicos Retina)
-- **CGEventCreateMouseEvent**: Criar eventos de mouse
-- **CGEventPost**: Enviar eventos de clique (coordenadas em pontos lógicos)
-- **NSScreen**: Informações de monitores e DPI (Retina)
-- **NSWorkspace**: Listar aplicativos em execução
+| API | Função | Notas |
+|-----|--------|-------|
+| `CGWindowListCopyWindowInfo` | Listar janelas | Inclui todos os Spaces |
+| `CGWindowListCreateImage` | Capturar janelas | Retorna pixels físicos (Retina) |
+| `CGEventCreateMouseEvent` | Criar eventos de mouse | - |
+| `CGEventPost` | Enviar cliques | Espera pontos lógicos |
+| `NSScreen` | Info de monitores | DPI e escala Retina |
+| `NSWorkspace` | Listar aplicativos | Processos em execução |
 
 ### Conceitos Importantes - macOS Retina
 
@@ -174,10 +210,10 @@ O ImageClicker suporta janelas em **fullscreen** (que ficam em Spaces separados 
 
 | Cenário | Funciona? |
 |---------|-----------|
-| Janela normal (mesmo Space) | ✅ Sim |
-| Janela fullscreen (Space dedicado, ativo) | ✅ Sim |
-| Janela em outro Space (não visível) | ❌ Não* |
-| Janela minimizada | ❌ Não |
+| Janela normal (mesmo Space) | Sim |
+| Janela fullscreen (Space dedicado, ativo) | Sim |
+| Janela em outro Space (não visível) | Não* |
+| Janela minimizada | Não |
 
 > *Limitação do macOS: não é possível capturar ou clicar em janelas de Spaces não ativos.
 
@@ -189,6 +225,7 @@ O ImageClicker suporta janelas em **fullscreen** (que ficam em Spaces separados 
 - **Multi-instância**: Busca em TODAS as janelas do mesmo processo (ex: 3 janelas do Safari)
 - Suporte multi-monitor via virtual screen
 - Escalonamento automático de DPI
+- **Conversão Retina automática**: Coordenadas são convertidas corretamente
 
 ### 2. Sistema de Tasks Unificado
 
@@ -212,7 +249,16 @@ O ImageClicker suporta janelas em **fullscreen** (que ficam em Spaces separados 
 - **Conversão Retina**: Coordenadas são convertidas de pixels físicos para pontos lógicos automaticamente
 
 ```python
-# Exemplo de conversão (interno)
+# Exemplo de conversão (interno - image_matcher.py)
+# Template matching retorna coordenadas em pixels físicos
+pixel_x = max_loc[0] + w // 2
+pixel_y = max_loc[1] + h // 2
+
+# Converter para pontos lógicos para CGEvent
+window_rect = get_window_rect(window_id)
+win_width_points = window_rect[2] - window_rect[0]
+img_height, img_width = screenshot_gray.shape
+
 scale_x = win_width_points / img_width  # ~0.5 em Retina
 rel_x = int(pixel_x * scale_x)          # Converte para pontos
 ```
@@ -227,6 +273,22 @@ rel_x = int(pixel_x * scale_x)          # Converte para pontos
 - **DPI automático**: Detecta escala DPI da janela e salva nos metadados PNG
 - Nome sugerido: `{TextoOCR}_{Processo}` (DPI removido do nome)
 - ESC para cancelar, botão direito para reiniciar
+
+```python
+# Exemplo de conversão de captura (interno - capture_overlay.py)
+# Coordenadas da seleção estão em pontos lógicos
+screen_x, screen_y = selection_start
+
+# Calcular fator de escala Retina
+scale_x = img_width / win_width  # ~2.0 em Retina
+scale_y = img_height / win_height
+
+# Converter para pixels físicos para recorte
+rel_x = int((screen_x - win_left) * scale_x)
+rel_y = int((screen_y - win_top) * scale_y)
+region_width = int(width * scale_x)
+region_height = int(height * scale_y)
+```
 
 > **Nota técnica**: A captura usa o mesmo método que o template matching (`CGWindowListCreateImage`) para garantir consistência nos resultados.
 
@@ -266,28 +328,28 @@ rel_x = int(pixel_x * scale_x)          # Converte para pontos
 - **Feedback visual**: Estados de botões, animações de pulse em tasks ativas
 - **Combos editáveis**: Campos de janela/processo permitem digitação livre
 - **Botões de refresh**: Atualização dinâmica de listas de janelas/processos
+- **Tema dark/light**: Toggle na interface
 
 ## Comandos CLI Principais
 
 ```bash
 # Usando alias (recomendado)
-iclick capture <nome>
-iclick click <nome>
-iclick tasks
-iclick list
+iclick capture <nome>      # Captura template
+iclick click <nome>        # Clica no template
+iclick tasks               # Executa tasks.json
+iclick list                # Lista recursos
 
 # Ou diretamente
 python iclick.py capture <nome>
 
-# Clique
-python iclick.py click <nome>                # Tela toda
-python iclick.py click <nome> --window "App" # Janela específica
+# Clique em janela específica
+python iclick.py click <nome> --window "App"
 
 # Outros
-python iclick.py wait <nome>                 # Espera e clica
-python iclick.py run <script>                # Executa script JSON
-python iclick.py tasks                       # Executa tasks.json
-python iclick.py list                        # Lista recursos
+python iclick.py wait <nome>     # Espera e clica
+python iclick.py run <script>    # Executa script JSON
+python iclick.py tasks           # Executa tasks.json
+python iclick.py list            # Lista recursos
 ```
 
 ## Troubleshooting macOS
@@ -309,7 +371,15 @@ python iclick.py list                        # Lista recursos
 
 **Causa**: Problema na conversão de coordenadas Retina.
 
-**Solução**: Verifique se está usando a versão mais recente do `capture_overlay.py` com suporte a escala Retina.
+**Solução**: Verifique se está usando a versão mais recente do `capture_overlay.py` com suporte a escala Retina (v3.1+).
+
+### Clique na posição errada
+
+**Sintoma**: Template é encontrado, mas o clique acontece em lugar errado.
+
+**Causa**: Coordenadas em pixels físicos não convertidas para pontos lógicos.
+
+**Solução**: Atualize para v3.1+ que inclui conversão automática em `image_matcher.py`.
 
 ### Template não encontrado (baixo match)
 
@@ -357,6 +427,19 @@ pip install -r requirements.txt
 **Solução**: Use nomes sem `.exe`:
 - Windows: `Code.exe` → macOS: `Code`
 - Windows: `chrome.exe` → macOS: `Google Chrome`
+- Windows: `Antigravity.exe` → macOS: `Antigravity`
+
+### GitHub CLI não autenticado
+
+**Sintoma**: Erro ao usar `gh` commands.
+
+**Solução**:
+```bash
+gh auth login
+# Seguir instruções interativas
+# Ou usar token:
+gh auth login --with-token <<< "ghp_seu_token_aqui"
+```
 
 ## Padrões de Código
 
@@ -395,7 +478,7 @@ pip install -r requirements.txt
 
 ---
 
-## 📚 MANUTENÇÃO DA DOCUMENTAÇÃO
+## Manutenção da Documentação
 
 ### Princípios de Documentação
 
@@ -497,441 +580,9 @@ Você DEVE atualizar a documentação quando:
    - claude.md: `Última Atualização: YYYY-MM-DD`
    - docs afetados: Adicionar nota de atualização se significativo
 
-##### Padrões de Formatação Markdown
-
-**Headings**:
-
-```markdown
-# Título Principal (H1 - apenas um por arquivo)
-
-## Seção Principal (H2)
-
-### Subseção (H3)
-
-#### Sub-subseção (H4)
-```
-
-**Listas**:
-
-```markdown
-- Item (usar hífen)
-  - Sub-item (indent 2 espaços)
-- Outro item
-
-1. Item numerado
-2. Outro item
-```
-
-**Code Blocks**:
-
-````markdown
-```python
-# Código Python com linguagem especificada
-```
-
-```bash
-# Comandos bash
-```
-
-```json
-{
-  "json": "example"
-}
-```
-````
-
-**Tabelas**:
-
-```markdown
-| Coluna 1 | Coluna 2 | Coluna 3 |
-|----------|----------|----------|
-| Valor 1  | Valor 2  | Valor 3  |
-```
-
-**Links**:
-
-```markdown
-[Texto do Link](arquivo.md)
-[Link Externo](https://example.com)
-[Seção](#titulo-da-secao)
-```
-
-**Ênfase**:
-
-```markdown
-**Negrito**
-*Itálico*
-`código inline`
-```
-
-**Avisos e Notas**:
-
-```markdown
-> **Nota**: Informação importante
-
-> **Aviso**: Cuidado com isso
-
-> **Dica**: Sugestão útil
-```
-
-##### Estrutura de Novos Docs
-
-Se criar novo arquivo em docs/:
-
-```markdown
-# Título do Documento
-
-Breve descrição (1-2 parágrafos).
-
-## Conteúdo Principal
-
-### Seção 1
-
-Conteúdo...
-
-### Seção 2
-
-Conteúdo...
-
-## Exemplos
-
-### Exemplo 1
-
-```code
-exemplo
-```
-
-### Exemplo 2
-
-```code
-exemplo
-```
-
-## Próximos Passos
-
-- [Documento Relacionado 1](link.md)
-- [Documento Relacionado 2](link.md)
-
-## Referências
-
-- [API Reference](api-reference.md)
-- [Outros links relevantes]
-```
-
-#### Regras de CRIAR Novos Docs
-
-**Quando Criar**:
-
-- Nova funcionalidade complexa (> 200 linhas doc)
-- Novo conceito fundamental
-- Guia tutorial específico
-- Referência técnica extensa
-
-**Onde Criar**:
-
-- **docs/** para documentação user-facing
-- **docs/dev/** (criar se necessário) para docs técnicos internos
-- Atualizar **docs/README.md** com link
-
-**Processo**:
-
-1. Verifique se não existe doc similar
-2. Planeje estrutura (outline)
-3. Escreva conteúdo
-4. Adicione exemplos práticos
-5. Adicione links relacionados
-6. Atualize docs/README.md (índice)
-7. Adicione referências cruzadas em outros docs
-
-#### Regras de REMOVER Docs
-
-**Quando Remover**:
-
-- Feature foi completamente removida
-- Doc foi consolidado em outro
-- Informação está obsoleta e não aplicável
-
-**Processo**:
-
-1. **Nunca Delete Imediatamente**: Marque como deprecated primeiro
-2. Adicione aviso no topo:
-
-```markdown
-> **⚠️ DEPRECATED**: Este documento está obsoleto.
-> Veja [Novo Documento](link.md) para informação atualizada.
-```
-
-3. Após 1-2 versões, delete arquivo
-4. Remova links para o doc em outros arquivos
-5. Atualize docs/README.md
-6. Adicione nota em CHANGELOG.md: "Removed: docs/old-file.md"
-
-#### Regras de ATUALIZAR Docs Existentes
-
-**Edições Menores** (typos, clareza, exemplos):
-
-- Edite diretamente
-- Não precisa mencionar em changelog
-
-**Edições Significativas** (mudança de comportamento, novos conceitos):
-
-- Edite conteúdo
-- Adicione nota de atualização (se relevante):
-
-```markdown
-> **Atualizado em YYYY-MM-DD**: [Descrição da mudança]
-```
-
-- Adicione entrada em CHANGELOG.md
-
-**Reestruturação Completa**:
-
-1. Crie novo arquivo com `_new` suffix
-2. Reescreva conteúdo
-3. Revise e valide
-4. Renomeie old → old_deprecated
-5. Renomeie new → nome correto
-6. Atualize links
-7. Delete old após confirmar
-
-### Validação de Documentação
-
-#### Checklist Antes de Commit
-
-- [ ] Todos os links funcionam (internos e externos)
-- [ ] Code blocks têm linguagem especificada
-- [ ] Exemplos foram testados
-- [ ] Sem typos (use spell checker)
-- [ ] Formatação markdown correta (.markdownlint.json)
-- [ ] Referências cruzadas atualizadas
-- [ ] docs/README.md reflete estrutura atual
-- [ ] CHANGELOG.md atualizado (se aplicável)
-- [ ] claude.md atualizado (se afeta agentes)
-
-#### Linting
-
-Use markdownlint (configurado em .markdownlint.json):
-
-```bash
-# Instalar (se disponível)
-npm install -g markdownlint-cli
-
-# Validar
-markdownlint docs/**/*.md claude.md
-
-# Auto-fix (cuidado!)
-markdownlint --fix docs/**/*.md
-```
-
-Regras desabilitadas (ver .markdownlint.json):
-
-- MD013 - Line length (linhas podem ser longas)
-- MD033 - HTML inline (permitido quando necessário)
-- MD041 - First line heading (nem sempre aplicável)
-
-### Workflow de Atualização Completo
-
-#### Exemplo: Adicionando Nova Feature
-
-**Cenário**: Adicionei suporte a `triple_click` em tasks.
-
-**Steps**:
-
-1. **Identifique Impacto**:
-   ```bash
-   cd docs/
-   grep -r "double_click" .
-   # Encontrou: concepts.md, tasks-guide.md, api-reference.md
-   ```
-
-2. **Atualize Docs Específicos**:
-
-   **tasks-guide.md**:
-   ```markdown
-   ## Tipos de Ação
-
-   - `click` - Clique simples
-   - `double_click` - Duplo clique
-   - `triple_click` - Triplo clique (novo!)
-   - `right_click` - Clique direito
-   ```
-
-   **concepts.md**:
-   ```markdown
-   ### Estrutura de uma Task
-
-   action: "click" | "double_click" | "triple_click" | "right_click"
-   ```
-
-   **api-reference.md**:
-   ```markdown
-   #### find_and_click()
-
-   **Parameters**:
-   - action (str): "click" | "double_click" | "triple_click" | "right_click"
-   ```
-
-3. **Atualize CHANGELOG.md**:
-   ```markdown
-   ## [Unreleased]
-
-   ### Added
-   - Suporte a triplo clique (`triple_click`) em tasks e scripts
-   ```
-
-4. **Atualize claude.md**:
-   ```markdown
-   ## Funcionalidades Principais
-
-   ### 2. Sistema de Tasks
-   - Suporte a múltiplos tipos de clique (simples, duplo, triplo, direito)
-   ```
-
-5. **Valide**:
-   - Teste exemplos
-   - Verifique links
-   - Markdownlint
-   - Review completo
-
-#### Exemplo: Corrigindo Bug Documentado
-
-**Cenário**: Bug em multi-monitor foi corrigido (coordenadas negativas).
-
-**Steps**:
-
-1. **Atualize troubleshooting.md**:
-   ```markdown
-   ## Multi-Monitor Issues
-
-   ### ~~Coordenadas Negativas~~
-
-   **Status**: Resolvido na v2.0.1
-
-   ~~Problema: Templates em monitor secundário (esquerda) não funcionavam.~~
-
-   Solução: Atualizado para usar virtual screen corretamente.
-   ```
-
-2. **Atualize concepts.md** (se aplicável):
-   ```markdown
-   ## Multi-Monitor
-
-   - Suporte completo a coordenadas negativas (monitor à esquerda)
-   ```
-
-3. **CHANGELOG.md**:
-   ```markdown
-   ## [2.0.1] - 2026-01-06
-
-   ### Fixed
-   - Corrigido suporte a coordenadas negativas em multi-monitor
-   ```
-
-4. **faq.md** (adicione se comum):
-   ```markdown
-   **P: Funciona com monitor à esquerda?**
-
-   R: Sim! A partir da v2.0.1, suporte completo a múltiplos monitores.
-   ```
-
-### Templates para Docs Comuns
-
-#### Novo Guia Tutorial
-
-```markdown
-# [Nome do Guia]
-
-[Breve descrição em 1-2 parágrafos]
-
-## Pré-requisitos
-
-- Item 1
-- Item 2
-
-## [Seção Principal 1]
-
-### Conceito
-
-Explicação...
-
-### Exemplo Prático
-
-```code
-exemplo
-```
-
-## [Seção Principal 2]
-
-...
-
-## Troubleshooting
-
-### Problema Comum 1
-
-**Sintoma**: Descrição
-
-**Solução**: Passos
-
-## Próximos Passos
-
-- [Doc Relacionado](link.md)
-
-## Referências
-
-- [API](api-reference.md)
-```
-
-#### Nova Entrada de FAQ
-
-```markdown
-**P: [Pergunta]?**
-
-R: [Resposta clara e concisa]
-
-[Exemplo de código ou comando, se aplicável]
-
-```bash
-comando exemplo
-```
-
-Veja também: [Doc Relacionado](link.md)
-```
-
-#### Nova Entrada de Troubleshooting
-
-```markdown
-### [Nome do Problema]
-
-**Sintomas**:
-- Sintoma 1
-- Sintoma 2
-
-**Causa Provável**:
-Explicação técnica breve.
-
-**Solução**:
-
-1. Passo 1
-   ```bash
-   comando
-   ```
-
-2. Passo 2
-
-3. Passo 3
-
-**Verificação**:
-Como confirmar que foi resolvido.
-
-**Se Não Resolver**:
-- Alternativa 1
-- Alternativa 2
-- Link para support/issue tracker
-```
-
 ---
 
-## 🤖 INSTRUÇÕES ESPECÍFICAS PARA AGENTES
+## Instruções Específicas para Agentes
 
 ### Ao Modificar Código
 
@@ -998,14 +649,13 @@ Como confirmar que foi resolvido.
 Antes de considerar tarefa completa:
 
 ```text
-✅ Código funciona
-✅ Testes passam (se houver)
-✅ Docs atualizados
-✅ Exemplos testados
-✅ Links funcionam
-✅ CHANGELOG.md atualizado (se aplicável)
-✅ claude.md atualizado (se afeta agentes)
-✅ Sem markdown warnings (.markdownlint.json)
+Código funciona
+Testes passam (se houver)
+Docs atualizados
+Exemplos testados
+Links funcionam
+CHANGELOG.md atualizado (se aplicável)
+claude.md atualizado (se afeta agentes)
 ```
 
 ---
@@ -1015,31 +665,40 @@ Antes de considerar tarefa completa:
 ### Comandos Úteis
 
 ```bash
+# Executar GUI
+imageclicker
+# ou
+./ImageClicker.command
+
+# Executar CLI
+iclick tasks
+iclick capture <nome>
+
 # Buscar em docs
 grep -r "termo" docs/
 
 # Listar todos os docs
 ls docs/*.md
 
-# Validar markdown (se markdownlint instalado)
-markdownlint docs/**/*.md
-
-# Contar linhas de doc
-wc -l docs/*.md
+# Git operations
+git status
+git add -A
+git commit -m "mensagem"
+git push
 ```
 
 ### Links Internos Importantes
 
-- [Documentação Principal](../docs/README.md)
-- [Instalação](../docs/installation.md)
-- [Início Rápido](../docs/quickstart.md)
-- [Conceitos](../docs/concepts.md)
-- [FAQ](../docs/faq.md)
-- [Changelog](../CHANGELOG.md)
+- [Documentação Principal](docs/README.md)
+- [Instalação](docs/installation.md)
+- [Início Rápido](docs/quickstart.md)
+- [Conceitos](docs/concepts.md)
+- [FAQ](docs/faq.md)
+- [Changelog](CHANGELOG.md)
 
 ### Contato e Suporte
 
-- **GitHub Issues**: Para bugs e feature requests
+- **GitHub Issues**: https://github.com/lmteixeira17/ImageClicker/issues
 - **Docs**: Sempre consulte primeiro
 - **Claude.md**: Para instruções aos agentes (este arquivo)
 
@@ -1063,18 +722,37 @@ wc -l docs/*.md
 1. **Captura de região** (`capture_overlay.py`):
    - Corrigido cálculo de escala para telas Retina
    - Coordenadas lógicas são convertidas para pixels físicos antes do recorte
+   - Método `capture_window_region_quartz` atualizado
 
 2. **Clique em posição correta** (`image_matcher.py`):
    - Coordenadas do template matching (pixels físicos) são convertidas para pontos lógicos
    - CGEvent recebe coordenadas em pontos lógicos corretamente
+   - Função `find_and_click` atualizada com conversão automática
 
 3. **Suporte a fullscreen** (`window_utils.py`):
    - `_get_all_windows_info` agora inclui janelas de todos os Spaces
+   - Usa `kCGWindowListOptionAll` em vez de `kCGWindowListOptionOnScreenOnly`
    - `get_windows_by_process` busca em todos os Spaces
    - `is_window_visible` considera janelas fullscreen
 
-### Arquivos Modificados
+### Arquivos Modificados na v3.1
 
-- `core/image_matcher.py` - Conversão pixels→pontos para cliques
-- `core/window_utils.py` - Suporte a fullscreen/Spaces
-- `ui_qt/components/capture_overlay.py` - Captura Retina correta
+| Arquivo | Mudança |
+|---------|---------|
+| `core/image_matcher.py` | Conversão pixels→pontos para cliques |
+| `core/window_utils.py` | Suporte a fullscreen/Spaces |
+| `ui_qt/components/capture_overlay.py` | Captura Retina correta |
+| `tasks.json` | Nomes de processo sem `.exe` |
+| `claude.md` | Documentação completa macOS |
+| `CHANGELOG.md` | Histórico de mudanças v3.1 |
+
+### Diferenças Windows vs macOS
+
+| Aspecto | Windows | macOS |
+|---------|---------|-------|
+| Nomes de processo | `Code.exe` | `Code` |
+| Clique fantasma | PostMessage (não move cursor) | CGEvent (move cursor momentaneamente) |
+| Coordenadas | Sempre pixels | Pontos lógicos (CGEvent) vs Pixels (captura) |
+| Fullscreen | Janela normal | Space dedicado |
+| Permissões | Nenhuma especial | Acessibilidade + Gravação de Tela |
+| Ambiente Python | Direto ou venv | venv obrigatório (macOS moderno) |
