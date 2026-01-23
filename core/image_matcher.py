@@ -1,7 +1,7 @@
 """
 Funcoes para template matching e clique em imagens.
 Usa OpenCV para deteccao e Quartz/CGEvent para cliques no macOS.
-Suporta captura de janelas em background usando CGWindowListCreateImage.
+Usa mss para captura de tela (mais eficiente em memoria).
 """
 
 import time
@@ -9,19 +9,10 @@ from pathlib import Path
 from typing import Callable, Optional, Tuple
 
 import cv2
+import mss
 import numpy as np
 
 from Quartz import (
-    CGWindowListCreateImage,
-    CGRectNull,
-    kCGWindowListOptionIncludingWindow,
-    kCGWindowImageBoundsIgnoreFraming,
-    kCGWindowImageDefault,
-    CGImageGetWidth,
-    CGImageGetHeight,
-    CGImageGetBytesPerRow,
-    CGImageGetDataProvider,
-    CGDataProviderCopyData,
     CGEventCreateMouseEvent,
     CGEventPost,
     kCGEventLeftMouseDown,
@@ -33,8 +24,6 @@ from Quartz import (
     kCGMouseButtonRight,
     CGEventSetIntegerValueField,
     kCGMouseEventClickState,
-    CGEventGetLocation,
-    CGWarpMouseCursorPosition,
 )
 from Quartz.CoreGraphics import CGPointMake
 
@@ -108,61 +97,38 @@ def _is_window_valid_for_capture(window_id: int) -> bool:
         return False
 
 
-def _cgimage_to_numpy(cg_image) -> Optional[np.ndarray]:
-    """
-    Converte CGImage para numpy array (BGR).
+# Instancia global do mss para evitar criar/destruir a cada captura
+_mss_instance = None
 
-    Args:
-        cg_image: CGImage do Quartz
 
-    Returns:
-        numpy array BGR ou None se falhar
-    """
-    if cg_image is None:
-        return None
+def _get_mss():
+    """Retorna instancia global do mss (cria se nao existir)."""
+    global _mss_instance
+    if _mss_instance is None:
+        _mss_instance = mss.mss()
+    return _mss_instance
 
+
+def _get_main_display_scale() -> float:
+    """Retorna o fator de escala do display principal (2.0 para Retina)."""
     try:
-        width = CGImageGetWidth(cg_image)
-        height = CGImageGetHeight(cg_image)
-        bytes_per_row = CGImageGetBytesPerRow(cg_image)
-
-        # Obtem dados do provider
-        data_provider = CGImageGetDataProvider(cg_image)
-        data = CGDataProviderCopyData(data_provider)
-
-        # Converte para numpy
-        img = np.frombuffer(data, dtype=np.uint8)
-
-        # CGImage retorna RGBA ou BGRA dependendo da fonte
-        # bytes_per_row pode incluir padding
-        if bytes_per_row == width * 4:
-            img = img.reshape((height, width, 4))
-        else:
-            # Com padding, precisamos processar linha por linha
-            img_reshaped = np.zeros((height, width, 4), dtype=np.uint8)
-            for row in range(height):
-                start = row * bytes_per_row
-                end = start + width * 4
-                img_reshaped[row] = np.frombuffer(data[start:end], dtype=np.uint8).reshape((width, 4))
-            img = img_reshaped
-
-        # Converte RGBA para BGR (OpenCV format)
-        # macOS CGImage usa BGRA por padrao
-        img_bgr = cv2.cvtColor(img, cv2.COLOR_BGRA2BGR)
-
-        return img_bgr
-
-    except Exception as e:
-        print(f"Erro ao converter CGImage: {e}")
-        return None
+        from AppKit import NSScreen
+        main_screen = NSScreen.mainScreen()
+        if main_screen:
+            return main_screen.backingScaleFactor()
+    except Exception:
+        pass
+    return 1.0
 
 
 def capture_window(window_id: int, restore_if_minimized: bool = False) -> Optional[np.ndarray]:
     """
-    Captura o conteudo de uma janela usando CGWindowListCreateImage.
-    Funciona mesmo quando a janela esta atras de outras ou parcialmente coberta.
+    Captura o conteudo de uma janela usando mss (captura de tela).
+    Captura a regiao da tela onde a janela esta posicionada.
 
-    IMPORTANTE: Janelas minimizadas sao ignoradas silenciosamente (retorna None).
+    NOTA: Diferente de CGWindowListCreateImage, esta abordagem captura
+    o que esta visivel na tela. Se a janela estiver coberta por outra,
+    a captura incluira a janela sobreposta.
 
     Args:
         window_id: ID da janela (kCGWindowNumber)
@@ -176,22 +142,50 @@ def capture_window(window_id: int, restore_if_minimized: bool = False) -> Option
         if not _is_window_valid_for_capture(window_id):
             return None
 
-        # Captura a janela usando CGWindowListCreateImage
-        # CGRectNull captura a janela inteira
-        # kCGWindowListOptionIncludingWindow inclui apenas a janela especificada
-        # kCGWindowImageBoundsIgnoreFraming ignora sombras e decoracoes
-        cg_image = CGWindowListCreateImage(
-            CGRectNull,
-            kCGWindowListOptionIncludingWindow,
-            window_id,
-            kCGWindowImageBoundsIgnoreFraming | kCGWindowImageDefault
-        )
-
-        if cg_image is None:
+        # Obtem coordenadas da janela (em pontos logicos)
+        rect = get_window_rect(window_id)
+        if not rect:
             return None
 
-        # Converte para numpy BGR
-        return _cgimage_to_numpy(cg_image)
+        left, top, right, bottom = rect
+        width = right - left
+        height = bottom - top
+
+        if width <= 0 or height <= 0:
+            return None
+
+        # Obtem fator de escala Retina
+        scale = _get_main_display_scale()
+
+        # Captura a regiao da tela usando mss
+        # mss no macOS trabalha com coordenadas em pontos logicos
+        # mas retorna imagem em pixels fisicos (2x em Retina)
+        sct = _get_mss()
+        monitor = {
+            "left": int(left),
+            "top": int(top),
+            "width": int(width),
+            "height": int(height)
+        }
+
+        # mss retorna BGRA
+        screenshot = sct.grab(monitor)
+
+        # Converte para numpy array BGR
+        img = np.array(screenshot)
+        img_bgr = cv2.cvtColor(img, cv2.COLOR_BGRA2BGR)
+
+        # Se a imagem capturada nao esta na resolucao Retina esperada,
+        # redimensiona para manter compatibilidade com templates existentes
+        expected_width = int(width * scale)
+        expected_height = int(height * scale)
+        actual_height, actual_width = img_bgr.shape[:2]
+
+        if actual_width != expected_width or actual_height != expected_height:
+            # mss capturou em resolucao diferente, ajusta
+            img_bgr = cv2.resize(img_bgr, (expected_width, expected_height), interpolation=cv2.INTER_LINEAR)
+
+        return img_bgr
 
     except Exception as e:
         print(f"Erro ao capturar janela: {e}")

@@ -3,6 +3,7 @@ Gerenciador de tasks para automação paralela.
 Suporta tasks simples (clique único) e prompt handlers (múltiplas opções).
 """
 
+import gc
 import json
 import threading
 from concurrent.futures import ThreadPoolExecutor
@@ -444,6 +445,9 @@ class TaskManager:
             # Aguarda intervalo
             self._update_status(task, f"{task.interval}s")
             stop_event.wait(task.interval)
+
+            # Libera memoria periodicamente para evitar vazamento
+            gc.collect()
 
         self._update_status(task, "Parado")
         self._log(f"Task #{task.id}: Thread parada")
