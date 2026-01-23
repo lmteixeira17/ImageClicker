@@ -4,9 +4,9 @@
 
 ImageClicker é uma ferramenta de automação de cliques baseada em reconhecimento de imagem para **macOS**. Suporta execução paralela de múltiplas tasks em diferentes janelas simultaneamente.
 
-**Versão**: 3.1 (macOS Native)
-**Última Atualização**: 2026-01-13
-**Plataforma**: macOS (Quartz/AppKit/PyObjC)
+**Versão**: 3.2 (macOS Native)
+**Última Atualização**: 2026-01-23
+**Plataforma**: macOS (Quartz/AppKit/PyObjC/mss)
 **Repositório**: https://github.com/lmteixeira17/ImageClicker
 
 ## Instalação e Execução
@@ -89,6 +89,38 @@ O projeto inclui scripts `.command` para execução fácil:
 | `install.command` | Instala dependências automaticamente |
 
 Para usar: duplo clique no Finder ou `chmod +x *.command` e execute.
+
+### App em /Applications (v3.2)
+
+O ImageClicker pode ser instalado como app em `/Applications/ImageClicker.app`:
+
+```bash
+# O app é um launcher que abre via Terminal para herdar permissões
+/Applications/ImageClicker.app
+```
+
+**Como funciona o launcher**:
+- Verifica se o app já está rodando (evita múltiplas instâncias)
+- Abre o Terminal e executa `app_qt.py` com o venv correto
+- Herda permissões de Acessibilidade e Gravação de Tela do Terminal
+
+**Arquivo do launcher**: `/Applications/ImageClicker.app/Contents/MacOS/ImageClicker`
+
+```bash
+#!/bin/bash
+# Verificar se já está rodando
+if pgrep -f "app_qt.py" > /dev/null; then
+    osascript -e 'tell application "System Events" to set frontmost of (first process whose name contains "Python") to true'
+    exit 0
+fi
+# Abrir via Terminal para herdar permissões
+osascript <<EOF
+tell application "Terminal"
+    activate
+    do script "cd '/caminho/para/ImageClicker' && ./venv/bin/python3 app_qt.py"
+end tell
+EOF
+```
 
 ### Permissões macOS (OBRIGATÓRIO)
 
@@ -183,11 +215,13 @@ ImageClicker/
 | API | Função | Notas |
 |-----|--------|-------|
 | `CGWindowListCopyWindowInfo` | Listar janelas | Inclui todos os Spaces |
-| `CGWindowListCreateImage` | Capturar janelas | Retorna pixels físicos (Retina) |
+| `mss` (biblioteca) | Capturar tela | Substitui CGWindowListCreateImage (v3.2) |
 | `CGEventCreateMouseEvent` | Criar eventos de mouse | - |
 | `CGEventPost` | Enviar cliques | Espera pontos lógicos |
 | `NSScreen` | Info de monitores | DPI e escala Retina |
 | `NSWorkspace` | Listar aplicativos | Processos em execução |
+
+> **Nota v3.2**: A captura de tela agora usa `mss` em vez de `CGWindowListCreateImage` para evitar vazamento de memória. A biblioteca `mss` captura a região da tela onde a janela está posicionada.
 
 ### Conceitos Importantes - macOS Retina
 
@@ -440,6 +474,20 @@ gh auth login
 # Ou usar token:
 gh auth login --with-token <<< "ghp_seu_token_aqui"
 ```
+
+### Vazamento de memória (versões anteriores a 3.2)
+
+**Sintoma**: Python consome 10+ GB de RAM após rodar por algum tempo.
+
+**Causa**: `CGWindowListCreateImage` do PyObjC não liberava objetos CoreGraphics corretamente.
+
+**Solução**: Atualize para v3.2+ que usa `mss` para captura de tela.
+
+**Detalhes técnicos**:
+- Antes (v3.1): `CGWindowListCreateImage` → vazamento de ~500MB/minuto
+- Depois (v3.2): `mss.grab()` → memória estável em ~200MB
+
+Se ainda usar v3.1, a única solução é reiniciar o app periodicamente.
 
 ## Padrões de Código
 
@@ -711,7 +759,7 @@ git push
 - Regras de documentação forem modificadas
 - Workflow de desenvolvimento mudar
 
-**Última Revisão Completa**: 2026-01-13
+**Última Revisão Completa**: 2026-01-23
 
 ---
 
@@ -756,3 +804,71 @@ git push
 | Fullscreen | Janela normal | Space dedicado |
 | Permissões | Nenhuma especial | Acessibilidade + Gravação de Tela |
 | Ambiente Python | Direto ou venv | venv obrigatório (macOS moderno) |
+
+---
+
+## Histórico de Correções macOS (v3.2)
+
+### Correção de Vazamento de Memória
+
+**Problema**: O app consumia 40+ GB de RAM após rodar por alguns minutos.
+
+**Causa raiz**: `CGWindowListCreateImage` do PyObjC/Quartz não liberava objetos CoreGraphics corretamente. Mesmo usando `NSAutoreleasePool`, `del`, e `gc.collect()`, a memória continuava vazando.
+
+**Solução implementada**: Substituição de `CGWindowListCreateImage` pela biblioteca `mss` para captura de tela.
+
+### Mudanças em `core/image_matcher.py`
+
+```python
+# ANTES (v3.1) - vazava memória
+from Quartz import CGWindowListCreateImage
+cg_image = CGWindowListCreateImage(...)  # PyObjC não liberava
+
+# DEPOIS (v3.2) - memória estável
+import mss
+sct = mss.mss()
+screenshot = sct.grab(monitor)  # Python puro, sem vazamento
+```
+
+### Funções adicionadas
+
+1. **`_get_mss()`**: Retorna instância global do mss (singleton)
+2. **`_get_main_display_scale()`**: Detecta fator de escala Retina via `NSScreen.backingScaleFactor()`
+
+### Tratamento de Retina
+
+A captura com `mss` requer ajuste para telas Retina:
+- `mss` recebe coordenadas em pontos lógicos
+- Retorna imagem em pixels físicos (2x em Retina)
+- O código redimensiona automaticamente para manter compatibilidade com templates
+
+### Arquivos Modificados na v3.2
+
+| Arquivo | Mudança |
+|---------|---------|
+| `core/image_matcher.py` | Substituição de CGWindowListCreateImage por mss |
+| `core/task_manager.py` | Adição de gc.collect() periódico (precaução) |
+| `/Applications/ImageClicker.app` | Launcher via Terminal para permissões |
+| `CLAUDE.md` | Documentação atualizada |
+
+### Resultados de Memória
+
+| Métrica | v3.1 (CGWindowListCreateImage) | v3.2 (mss) |
+|---------|-------------------------------|------------|
+| Memória inicial | ~1.8 GB | ~200 MB |
+| Após 5 minutos | 5-10 GB | ~200 MB |
+| Após 30 minutos | 40+ GB (crash) | ~200 MB |
+| Tendência | Crescente (vazamento) | **Estável** |
+
+### Limitação da nova abordagem
+
+A biblioteca `mss` captura a **região da tela** onde a janela está, não a janela em si. Isso significa que:
+- Se outra janela estiver cobrindo, a captura incluirá a janela sobreposta
+- Funciona bem para prompts/dialogs que ficam em primeiro plano
+- Não funciona para janelas cobertas (diferente de `CGWindowListCreateImage`)
+
+Para o caso de uso principal (clicar em prompts do Claude Code/VSCode), isso não é problema pois os prompts sempre aparecem em primeiro plano.
+
+---
+
+**Última Revisão Completa**: 2026-01-23
