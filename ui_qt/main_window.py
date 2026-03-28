@@ -35,8 +35,8 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
 
-        # Paths
-        self.base_dir = Path(__file__).parent.parent
+        # Paths - usa diretorio do projeto se existir, senao usa bundle do PyInstaller
+        self.base_dir = self._resolve_data_dir()
         self.images_dir = self.base_dir / "images"
         self.tasks_file = self.base_dir / "tasks.json"
 
@@ -109,6 +109,22 @@ class MainWindow(QMainWindow):
 
         # Mostra onboarding se for novo usuário
         self._check_onboarding()
+
+    @staticmethod
+    def _resolve_data_dir() -> Path:
+        """
+        Resolve o diretorio de dados (tasks.json, images/).
+        Quando executado via PyInstaller, os dados ficam dentro do bundle,
+        mas queremos usar o diretorio original do projeto para manter
+        configuracoes e templates atualizados.
+        """
+        # Diretorio do projeto original
+        project_dir = Path.home() / "Library/CloudStorage/OneDrive-Personal/LM/Projetos/OK_ImageClicker_MAC"
+        if (project_dir / "tasks.json").exists():
+            return project_dir
+
+        # Fallback: diretorio relativo ao script (funciona em dev e no bundle)
+        return Path(__file__).parent.parent
 
     def _setup_shortcuts(self):
         """Configura todos os atalhos de teclado."""

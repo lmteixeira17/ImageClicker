@@ -13,10 +13,13 @@ import mss
 import numpy as np
 
 from Quartz import (
+    CGEventCreate,
     CGEventCreateMouseEvent,
+    CGEventGetLocation,
     CGEventPost,
     kCGEventLeftMouseDown,
     kCGEventLeftMouseUp,
+    kCGEventMouseMoved,
     kCGEventRightMouseDown,
     kCGEventRightMouseUp,
     kCGHIDEventTap,
@@ -154,8 +157,8 @@ def capture_window(window_id: int, restore_if_minimized: bool = False) -> Option
         if width <= 0 or height <= 0:
             return None
 
-        # Obtem fator de escala Retina
-        scale = _get_main_display_scale()
+        # Obtem fator de escala Retina do monitor onde a janela esta
+        scale = get_window_dpi_scale(window_id)
 
         # Captura a regiao da tela usando mss
         # mss no macOS trabalha com coordenadas em pontos logicos
@@ -197,10 +200,10 @@ def _perform_ghost_click(window_id: int, x: int, y: int, action: str):
     Executa clique via CGEvent.
 
     No macOS, CGEvent move o cursor. Para minimizar o impacto:
-    1. Salva posicao atual do cursor
+    1. Salva posicao atual do cursor e app ativo
     2. Move para posicao alvo
     3. Executa clique
-    4. Restaura posicao do cursor
+    4. Restaura posicao do cursor e app ativo
 
     Args:
         window_id: ID da janela alvo
@@ -209,6 +212,8 @@ def _perform_ghost_click(window_id: int, x: int, y: int, action: str):
         action: "click", "double_click" ou "right_click"
     """
     try:
+        import subprocess
+
         # Obtem coordenadas absolutas da janela
         rect = get_window_rect(window_id)
         if not rect:
@@ -218,10 +223,19 @@ def _perform_ghost_click(window_id: int, x: int, y: int, action: str):
         abs_x = rect[0] + x
         abs_y = rect[1] + y
 
-        # Salva posicao atual do cursor
-        # (infelizmente CGEvent sempre move o cursor)
-        # Comentado por enquanto - pode causar efeitos indesejados
-        # original_pos = CGEventGetLocation(CGEventCreate(None))
+        # Salva posicao atual do cursor para restaurar apos o clique
+        original_pos = CGEventGetLocation(CGEventCreate(None))
+
+        # Salva app ativo via osascript (thread-safe, diferente de NSWorkspace)
+        try:
+            result = subprocess.run(
+                ['osascript', '-e',
+                 'tell application "System Events" to get name of first application process whose frontmost is true'],
+                capture_output=True, text=True, timeout=2
+            )
+            frontmost_app = result.stdout.strip()
+        except Exception:
+            frontmost_app = None
 
         point = CGPointMake(float(abs_x), float(abs_y))
 
@@ -260,6 +274,21 @@ def _perform_ghost_click(window_id: int, x: int, y: int, action: str):
 
         # Pequeno delay apos o clique
         time.sleep(0.05)
+
+        # Restaura posicao original do cursor
+        restore_point = CGPointMake(float(original_pos.x), float(original_pos.y))
+        move_event = CGEventCreateMouseEvent(None, kCGEventMouseMoved, restore_point, kCGMouseButtonLeft)
+        CGEventPost(kCGHIDEventTap, move_event)
+
+        # Restaura foco para o app que estava ativo (via osascript, thread-safe)
+        if frontmost_app:
+            try:
+                subprocess.Popen(
+                    ['osascript', '-e', f'tell application "{frontmost_app}" to activate'],
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+                )
+            except Exception:
+                pass
 
     except Exception as e:
         print(f"Erro ao executar clique: {e}")
